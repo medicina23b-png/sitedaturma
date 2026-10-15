@@ -1,0 +1,18 @@
+[build]
+  publish = "public"
+  command = ""
+
+# Como é um site de página única sem roteador próprio, qualquer caminho cai
+# no mesmo index.html (hoje não há outras páginas, mas evita 404 se alguém
+# recarregar uma URL com parâmetros no futuro).
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+[[headers]]
+  for = "/*"
+  [headers.values]
+    X-Frame-Options = "DENY"
+    X-Content-Type-Options = "nosniff"
+    Referrer-Policy = "strict-origin-when-cross-origin"

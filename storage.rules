@@ -1,0 +1,14 @@
+rules_version = '2';
+
+// Arquivos da turma (substitui a pasta do Google Drive usada pelo Code.gs).
+// Upload só pelo presidente; leitura para qualquer um autenticado no site —
+// mesma regra de acesso que o Firestore (ver firestore.rules).
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /arquivos/{allPaths=**} {
+      allow read: if request.auth != null;
+      allow write: if request.auth != null && request.auth.token.role == 'presidente'
+                   && request.resource.size < 45 * 1024 * 1024; // ~45MB, igual ao limite do Code.gs
+    }
+  }
+}

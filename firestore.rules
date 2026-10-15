@@ -1,0 +1,160 @@
+rules_version = '2';
+
+// ============================================================================
+// Regras de segurança — Cronograma Acadêmico (Turma 23B)
+//
+// Modelo de autenticação: Firebase Authentication com TOKEN PERSONALIZADO
+// (custom token), emitido pela Cloud Function "login" depois de validar o
+// usuário (e, para o presidente, a senha) contra a coleção "usuarios" / o
+// segredo PRESIDENTE_SENHA. O token carrega duas "custom claims":
+//   role    -> 'presidente' ou 'user'
+//   usuario -> o nome de usuário (ex.: "aluno01"), sempre em minúsculas
+//
+// Por que custom token em vez de e-mail/senha do Firebase Auth: o pedido foi
+// manter o MESMO login simples (usuário, e senha só para o presidente), só
+// que validado no servidor antes de liberar o Firestore — exatamente o que
+// um custom token faz. E como o Firebase Auth SDK persiste a sessão sozinho
+// (IndexedDB, sobrevive a fechar o navegador), acaba o motivo de existir o
+// "link pessoal de acesso" por usuário.
+// ============================================================================
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function signedIn() { return request.auth != null; }
+    function role() { return signedIn() ? request.auth.token.role : null; }
+    function meu() { return signedIn() ? request.auth.token.usuario : null; }
+    function presidente() { return role() == 'presidente'; }
+    function dono(usuarioDoCampo) { return signedIn() && meu() == usuarioDoCampo; }
+
+    // ---------------- Eventos (cronograma) ----------------
+    match /eventos/{id} {
+      allow read: if signedIn();
+      allow write: if presidente();
+    }
+
+    // ---------------- Arquivos da turma ----------------
+    match /arquivos/{id} {
+      allow read: if signedIn();
+      allow write: if presidente();
+    }
+
+    // ---------------- Mural de avisos ----------------
+    match /mural/{id} {
+      allow read: if signedIn();
+      allow create, update, delete: if presidente();
+    }
+    // Quem leu cada aviso (equivalente à aba MuralLido)
+    match /muralLido/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.usuario == meu();
+      allow delete: if false;
+      allow update: if false;
+    }
+    // Votos de enquete (equivalente à aba MuralVotos)
+    match /muralVotos/{id} {
+      allow read: if signedIn();
+      allow create: if signedIn() && request.resource.data.usuario == meu();
+      allow delete: if signedIn() && resource.data.usuario == meu();
+      allow update: if false;
+    }
+
+    // ---------------- Datas importantes ----------------
+    match /datasImportantes/{id} {
+      allow read: if signedIn();
+      allow write: if presidente();
+    }
+
+    // ---------------- Eventos acompanhados (equivalente à aba Acompanhados) ----------------
+    match /acompanhados/{id} {
+      allow read: if signedIn() && resource.data.usuario == meu();
+      allow create: if signedIn() && request.resource.data.usuario == meu();
+      allow delete: if signedIn() && resource.data.usuario == meu();
+    }
+
+    // ---------------- Notas privadas por evento (anotação pessoal) ----------------
+    // Id do documento é "<usuario>__<eventoId>", então dá pra checar o dono
+    // só pelo id, sem precisar nem ler o conteúdo do documento.
+    match /notas/{id} {
+      allow read, write: if signedIn() && id.split('__')[0] == meu();
+    }
+
+    // ---------------- Usuários / Discentes ----------------
+    // Discente só lê o próprio documento (nunca o de outro); presidente lê e
+    // escreve todos. A senha de acesso às Notas (campo senhaNotasHash) nunca é
+    // usada pelo cliente direto daqui — é conferida só dentro da Cloud
+    // Function loginNotas, com o Admin SDK (que ignora estas regras).
+    match /usuarios/{usuario} {
+      allow read: if presidente() || dono(usuario);
+      allow write: if presidente();
+    }
+
+    // ---------------- Avaliações (notas de prova) ----------------
+    // O PRESIDENTE lê a coleção inteira direto (aba "Envio de Notas"). Um
+    // discente NUNCA lê daqui — ele só recebe a própria nota de volta pela
+    // Cloud Function readNotasAluno, depois de confirmar a senha individual
+    // da aba Notas (mesmo modelo do Code.gs). Escrita só pelas Cloud
+    // Functions (saveAvaliacao/saveAvaliacoesEmLote/deleteAvaliacao), que
+    // usam o Admin SDK e por isso nem passam por esta regra.
+    match /avaliacoes/{id} {
+      allow read: if presidente();
+      allow write: if false;
+    }
+
+    // ---------------- Coordenador da Tutoria (sessão por evento) ----------------
+    match /sessoesTutoria/{eventoId} {
+      allow read: if signedIn();
+      // Objetivos podem ser criados/editados por qualquer discente enquanto a
+      // sessão não estiver encerrada; depois de encerrada, fica congelada.
+      allow create: if signedIn();
+      allow update: if signedIn() && resource.data.status != 'encerrada';
+      allow delete: if false;
+    }
+
+    // ---------------- Configuração do semestre atual ----------------
+    match /config/{chave} {
+      allow read: if signedIn();
+      allow write: if presidente();
+    }
+
+    // ---------------- Semestres arquivados ----------------
+    // Só o presidente consegue ver a lista/abrir um semestre arquivado (igual
+    // ao Code.gs: discente nunca lê isso). A gravação é feita só pela Cloud
+    // Function encerrarSemestre (Admin SDK).
+    match /semestres/{id} {
+      allow read: if presidente();
+      allow write: if false;
+      match /{sub=**} {
+        allow read: if presidente();
+        allow write: if false;
+      }
+    }
+    // Notas de semestres encerrados: de propósito, ningúem acessa pelo app —
+    // só quem abrir o Firebase Console diretamente (mesmo espírito da aba
+    // "escondida" no Google Sheets original).
+    match /semestresNotasOcultas/{a=**} {
+      allow read, write: if false;
+    }
+
+    // ---------------- Notificações no app (novo) ----------------
+    match /notificacoes/{usuario}/itens/{id} {
+      allow read, update, delete: if dono(usuario);
+      // Criadas só pelas Cloud Functions (fan-out via Admin SDK) — nunca
+      // diretamente pelo cliente, pra ninguém conseguir "notificar a si
+      // mesmo" fora do fluxo real (mural/evento alterado).
+      allow create: if false;
+    }
+
+    // ---------------- Fila de e-mail (extensão "Trigger Email") ----------------
+    match /mail/{id} {
+      allow read, write: if false;
+    }
+
+    // ---------------- Controle de lembretes de evento já enviados ----------------
+    // Só a Cloud Function agendada (enviarLembretesEventos, via Admin SDK)
+    // lê/escreve aqui — guarda quais lembretes (1 dia/1 hora/30 min) de cada
+    // evento já foram mandados, pra nunca duplicar.
+    match /lembretesEnviados/{eventoId} {
+      allow read, write: if false;
+    }
+  }
+}
