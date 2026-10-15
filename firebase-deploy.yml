@@ -1,0 +1,42 @@
+name: Publicar Cloud Functions e regras no Firebase
+
+# Depois de configurado o segredo FIREBASE_SERVICE_ACCOUNT (veja o README,
+# seção "Deploy automático"), todo push na branch main que toque em
+# functions/, firestore.rules ou storage.rules publica sozinho no Firebase —
+# sem precisar rodar "firebase deploy" na mão de novo.
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'functions/**'
+      - 'firestore.rules'
+      - 'storage.rules'
+      - 'firebase.json'
+      - 'firestore.indexes.json'
+      - '.github/workflows/firebase-deploy.yml'
+  workflow_dispatch: {}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+
+      - name: Instalar dependências das Cloud Functions
+        run: npm --prefix functions ci
+
+      - name: Gravar a credencial do Firebase (temporária, só nesta execução)
+        run: echo '${{ secrets.FIREBASE_SERVICE_ACCOUNT }}' > "$RUNNER_TEMP/firebase-key.json"
+
+      - name: Publicar Functions + Regras do Firestore/Storage
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: ${{ runner.temp }}/firebase-key.json
+        run: npx firebase-tools@13 deploy --only functions,firestore:rules,storage:rules --project turma23b --non-interactive
+
+      - name: Apagar a credencial temporária
+        if: always()
+        run: rm -f "$RUNNER_TEMP/firebase-key.json"
