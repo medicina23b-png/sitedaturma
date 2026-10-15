@@ -53,12 +53,15 @@ if (!fs.existsSync(XLSX_PATH)) {
   console.error('Faltando scripts/data/dados-turma.xlsx — coloque ali a planilha exportada (.xlsx) com os dados da turma.');
   process.exit(1);
 }
-if (!fs.existsSync(FIREBASE_KEY)) {
-  console.error('Faltando scripts/firebase-service-account.json — veja as instruções no topo deste script.');
-  process.exit(1);
-}
+const TEM_CHAVE_LOCAL = fs.existsSync(FIREBASE_KEY);
 
-admin.initializeApp({ credential: admin.credential.cert(require(FIREBASE_KEY)) });
+// Rodando no Cloud Shell (ou em qualquer máquina já autenticada com "gcloud
+// auth application-default login") não precisa do arquivo de chave: usa a
+// credencial padrão da conta logada, que já é dona do projeto.
+admin.initializeApp({
+  credential: TEM_CHAVE_LOCAL ? admin.credential.cert(require(FIREBASE_KEY)) : admin.credential.applicationDefault(),
+  projectId: 'turma23b',
+});
 const db = admin.firestore();
 const livro = XLSX.readFile(XLSX_PATH);
 

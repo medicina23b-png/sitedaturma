@@ -10,15 +10,13 @@ Este documento é o roteiro completo, passo a passo, para colocar tudo isso no a
 
 ### O que é automático e o que não tem como automatizar
 
-Depois de configurado uma única vez, o dia a dia é só `git push` — o Netlify publica o site sozinho, e uma automação do GitHub (passo 3.4) publica as Cloud Functions/regras sozinha também. Mas existe um punhado de coisas que **só o dono da conta Google/Firebase pode fazer** (são cliques/senhas presos à identidade de quem é o titular do projeto) — ninguém, nem eu, consegue pular isso por fora:
+O frontend (`public/`) publica sozinho a cada `git push`, porque o Netlify já está conectado ao GitHub. O backend (Functions/Firestore) você publica do seu computador com um comando (passo 3.3/3.4) sempre que mudar algo ali — não tem GitHub Actions, não tem segredo pra configurar, não tem chave de conta de serviço pra gerenciar. É:
 
 1. Ativar Firestore e Authentication no Console do Firebase (1.2) — alguns cliques, uma vez.
 2. Colocar o projeto no plano **Blaze** (pago por uso, exigido pelas Cloud Functions) — a turma fica, na prática, dentro da faixa gratuita mensal.
 3. Guardar a senha do presidente em segredo (3.1) — um comando, uma vez.
-4. Gerar a chave de conta de serviço do Firebase e colar como segredo no GitHub (3.4) — pra automação de deploy funcionar.
+4. Publicar Functions/regras (3.3) — um comando (`firebase deploy ...`), repetido só quando você mudar algo em `functions/` ou `firestore.rules`.
 5. Rodar a migração dos dados (5) — uma vez, com os dados que você já tem.
-
-Depois desses 5 passos (todos de "fazer uma vez"), tudo mais roda sozinho.
 
 ---
 
@@ -107,16 +105,15 @@ Isso leva alguns minutos na primeira vez. No final, o terminal mostra uma lista 
 
 **Observação sobre os lembretes automáticos de evento** (`enviarLembretesEventos`): essa função roda sozinha a cada 5 minutos (usando o Cloud Scheduler do Google) — não precisa fazer nada além do `firebase deploy` acima. Só na primeira vez, o terminal pode pedir para confirmar a ativação das APIs **Cloud Scheduler** e **Cloud Pub/Sub** (responda "y"/sim); se isso não acontecer automaticamente, ative as duas em [console.cloud.google.com/apis/library](https://console.cloud.google.com/apis/library) (busque pelo nome) e rode o deploy de novo.
 
-### 3.4 Deploy automático a partir do GitHub (fazer só uma vez)
+### 3.4 Quando mudar `functions/` ou `firestore.rules` de novo
 
-Depois disso, você nunca mais precisa rodar `firebase deploy` na mão — este projeto já vem com uma automação (`.github/workflows/firebase-deploy.yml`) que publica sozinha as Cloud Functions e as regras a cada `git push` na branch `main`. Pra ligá-la:
+Este projeto **não usa GitHub Actions** — o GitHub só guarda o código e alimenta o Netlify (que publica `public/` sozinho a cada `git push`). Backend (Functions/Firestore) é publicado direto do seu computador, com o comando do passo 3.3:
 
-1. Gere **outra** chave de conta de serviço do Firebase (pode ser a mesma do passo 5.1 mais abaixo, ou uma nova): Console do Firebase → ⚙️ **Configurações do projeto** → **Contas de serviço** → **Gerar nova chave privada**. Abre um arquivo `.json`.
-2. No GitHub, dentro do repositório → **Settings** → **Secrets and variables** → **Actions** → **New repository secret**.
-3. Nome do segredo: `FIREBASE_SERVICE_ACCOUNT`. Valor: cole o **conteúdo inteiro** do arquivo `.json` baixado no passo 1.
-4. Salve. No próximo `git push` que tocar em `functions/` ou `firestore.rules`, a aba **Actions** do GitHub mostra o deploy rodando sozinho.
+```bash
+firebase deploy --only functions,firestore:rules
+```
 
-(Pode rodar manualmente também, sem precisar de um push: aba **Actions** do repositório → "Publicar Cloud Functions e regras no Firebase" → **Run workflow**.)
+Repita esse único comando sempre que alterar algo em `functions/index.js` ou `firestore.rules`. Como você já está logado (`firebase login`, passo 1.3) com a sua própria conta Google — dona do projeto — não existe segredo, chave ou permissão extra para configurar: sua conta já tem acesso total.
 
 ---
 
@@ -220,7 +217,7 @@ A partir de agora, **todo `git push` no GitHub publica automaticamente** a nova 
 
 Isso é o Firebase dizendo que a Cloud Function `login` quebrou no meio do caminho (ou nem existe ainda) — quase sempre por uma destas causas, nesta ordem de probabilidade:
 
-1. **As Cloud Functions ainda não foram publicadas.** Veja no [Firebase Console](https://console.firebase.google.com) → projeto `turma23b` → **Functions**: se a lista estiver vazia, é isso. Faça o passo 3 (ou, se já configurou o segredo `FIREBASE_SERVICE_ACCOUNT` no GitHub, dê um `git push` qualquer que toque em `functions/` para a automação publicar).
+1. **As Cloud Functions ainda não foram publicadas.** Veja no [Firebase Console](https://console.firebase.google.com) → projeto `turma23b` → **Functions**: se a lista estiver vazia, é isso. Rode o passo 3.3 (`firebase deploy --only functions,firestore:rules`) do seu computador.
 2. **O segredo `PRESIDENTE_SENHA` não foi configurado** (passo 3.1) — sem ele, a função quebra sempre que alguém tenta entrar como presidente.
 3. **O Firestore ainda não foi criado** no projeto (passo 1.2) — a função tenta ler a coleção `usuarios` e não encontra nem o banco.
 4. **O projeto não está no plano Blaze** — nesse caso o próprio `firebase deploy` já teria avisado e recusado publicar as functions; confirme em Console → ⚙️ → Uso e cobrança.
@@ -251,7 +248,6 @@ Pra confirmar qual é: Console do Firebase → **Functions** → clique na funç
 ```
 public/            → o site em si (único arquivo index.html + ícones), publicado no Netlify
 functions/          → Cloud Functions (toda a lógica de servidor, equivalente ao antigo Code.gs)
-.github/workflows/  → automação que publica Functions/regras a cada git push (passo 3.4)
 scripts/migrate.js  → script de migração (roda uma única vez)
 scripts/data/dados-turma.xlsx → dados reais da turma pra migração — NUNCA commitar (já no .gitignore)
 scripts/make_favicon.py → script que gerou os ícones/favicon (não precisa rodar de novo)
