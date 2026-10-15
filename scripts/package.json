@@ -1,9 +1,0 @@
-{
-  "name": "turma23b-migracao",
-  "private": true,
-  "scripts": { "start": "node migrate.js" },
-  "dependencies": {
-    "firebase-admin": "^12.6.0",
-    "xlsx": "^0.18.5"
-  }
-}
