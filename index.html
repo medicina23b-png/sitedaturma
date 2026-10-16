@@ -1267,7 +1267,14 @@ const Remote = {
       cred = await FB().signInWithEmailAndPassword(FB().auth, email, senhaReal);
     } catch (err) {
       const code = String((err && err.code) || '');
-      if (code.indexOf('user-not-found') >= 0) {
+      // Versões recentes do Firebase Auth não dizem mais separadamente
+      // "não existe" vs "senha errada" (por segurança, pra ninguém descobrir
+      // por tentativa quais usuários existem) — tudo vira um erro genérico
+      // ("invalid-credential"/"invalid-login-credentials"). Como a senha que
+      // a gente manda já é sempre a certa (é gerada aqui mesmo), um erro
+      // aqui só pode mesmo ser "essa conta ainda não existe" — então cria.
+      const podeSerPrimeiraVez = code.indexOf('user-not-found') >= 0 || code.indexOf('invalid-credential') >= 0 || code.indexOf('invalid-login-credentials') >= 0;
+      if (podeSerPrimeiraVez) {
         // Primeira vez dessa pessoa — cria a conta sozinho, sem precisar de
         // ninguém clicar em nada no Firebase Console.
         try { cred = await FB().createUserWithEmailAndPassword(FB().auth, email, senhaReal); }
