@@ -30,21 +30,19 @@
      imports funcionarem) e expõe tudo em window.Firebase, que o script
      principal mais abaixo usa (ver objeto "Remote"). ===================== -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-  import { getAnalytics, isSupported as analyticsIsSupported } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics.js";
-  import {
-    getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut,
-  } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+  import { getAnalytics, isSupported as analyticsIsSupported } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-analytics.js";
   import {
     getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc,
     updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch,
-  } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
   // Sem Firebase Storage neste projeto (por escolha) — "Arquivos da Turma"
   // funciona só por link (Google Drive, Docs etc.), então não precisa do
   // SDK de Storage nem do produto Storage ativado no Console.
   // Sem Cloud Functions neste projeto (por escolha, pra não exigir o plano
-  // Blaze/cartão de crédito) — login usa Firebase Authentication direto, e
-  // toda a lógica de negócio roda no próprio navegador + regras do Firestore.
+  // Blaze/cartão de crédito) e SEM Firebase Authentication (por escolha do
+  // presidente) — toda a lógica de negócio roda no próprio navegador, e o
+  // Firestore fica com leitura/escrita abertas (ver firestore.rules).
 
   // Config pública do projeto "turma23b" — não é segredo: a segurança do
   // Firebase vem das regras do Firestore e da validação nas Cloud
@@ -61,13 +59,11 @@
   };
 
   const app = initializeApp(firebaseConfig);
-  const auth = getAuth(app);
   const db = getFirestore(app);
   analyticsIsSupported().then(ok => { if (ok) getAnalytics(app); }).catch(() => {});
 
   window.Firebase = {
-    app, auth, db,
-    signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut,
+    app, db,
     collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
     query, where, orderBy, limit, onSnapshot, writeBatch,
   };
@@ -1243,11 +1239,12 @@ async function montarMural(usuarioAtual) {
   }).sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
 }
 
-// Senha "técnica" usada para os discentes entrarem — ninguém digita ela (o
-// site não pede senha pro aluno, só o usuário). O presidente tem senha de
-// verdade, fixa. Nenhuma conta precisa ser criada à mão no Firebase Console:
-// na primeira vez que cada pessoa entra, o próprio site cria a conta dela.
-const SENHA_TECNICA_DISCENTE = 'turma23b-sessao-2026-sem-senha-';
+// Senha do presidente — fixa. O discente não tem senha nenhuma (só digita o
+// usuário). SEM Firebase Authentication neste projeto (por escolha do
+// presidente): o Firestore fica com leitura/escrita abertas (ver
+// firestore.rules) e quem está "logado" é controlado só pelo navegador de
+// cada um (guardado em localStorage) — não existe mais nenhuma verificação
+// do lado do servidor de quem é quem.
 const SENHA_PRESIDENTE = '23b23b';
 
 const Remote = {
@@ -1256,47 +1253,14 @@ const Remote = {
     const u = String(usuario || '').trim().toLowerCase();
     if (!u) throw new ApiError('Informe o usuário.');
     if (u === 'presidente' && String(senha || '') !== SENHA_PRESIDENTE) throw new ApiError('Senha incorreta.');
-    const email = u + '@turma23b.local';
-    const senhaReal = u === 'presidente' ? SENHA_PRESIDENTE : (SENHA_TECNICA_DISCENTE + u);
-    // Autentica (ou cria a conta, se for a primeira vez) ANTES de olhar o
-    // Firestore — as regras só liberam leitura pra quem já está autenticado,
-    // então checar "o usuário existe?" antes da autenticação sempre seria
-    // negado, mesmo pro usuário certo.
-    let cred;
-    try {
-      cred = await FB().signInWithEmailAndPassword(FB().auth, email, senhaReal);
-    } catch (err) {
-      const code = String((err && err.code) || '');
-      // Versões recentes do Firebase Auth não dizem mais separadamente
-      // "não existe" vs "senha errada" (por segurança, pra ninguém descobrir
-      // por tentativa quais usuários existem) — tudo vira um erro genérico
-      // ("invalid-credential"/"invalid-login-credentials"). Como a senha que
-      // a gente manda já é sempre a certa (é gerada aqui mesmo), um erro
-      // aqui só pode mesmo ser "essa conta ainda não existe" — então cria.
-      const podeSerPrimeiraVez = code.indexOf('user-not-found') >= 0 || code.indexOf('invalid-credential') >= 0 || code.indexOf('invalid-login-credentials') >= 0;
-      if (podeSerPrimeiraVez) {
-        // Primeira vez dessa pessoa — cria a conta sozinho, sem precisar de
-        // ninguém clicar em nada no Firebase Console.
-        try { cred = await FB().createUserWithEmailAndPassword(FB().auth, email, senhaReal); }
-        catch (err2) { throw toApiError(err2); }
-      } else {
-        throw toApiError(err);
-      }
-    }
     const role = u === 'presidente' ? 'presidente' : 'user';
     let nomeReal = '';
     if (role !== 'presidente') {
-      // Agora já autenticado como esse próprio usuário — a regra "dono()"
-      // libera ler o próprio documento. Se não existir, essa pessoa não é
-      // discente de verdade: desfaz a sessão e recusa.
       const snap = await FB().getDoc(docRef('usuarios', u));
-      if (!snap.exists()) {
-        await FB().signOut(FB().auth);
-        throw new ApiError('Usuário não encontrado.');
-      }
+      if (!snap.exists()) throw new ApiError('Usuário não encontrado.');
       nomeReal = snap.data().nome || '';
     }
-    return { role, usuario: u, nomeReal, token: 'firebase' };
+    return { role, usuario: u, nomeReal, token: 'local' };
   },
 
   async sync(usuario, v, va, vm, vd, vav, vdi, vc) {
@@ -1312,17 +1276,25 @@ const Remote = {
         serverTime: new Date().toISOString(), appUrl: '',
       };
 
+      // Cada tarefa é rotulada com o nome da coleção, pra se alguma falhar
+      // (ex.: permission-denied) o Console mostrar exatamente qual foi —
+      // em vez de um erro genérico que não diz onde a regra bloqueou.
+      const marcar = (rotulo, promessa) => promessa.catch(err => {
+        console.error('[sync:' + rotulo + ']', (err && err.code) || '', (err && err.message) || err);
+        throw err;
+      });
+
       const tarefas = [
-        pegarTodos('eventos').then(r => { out.events = r; }),
-        pegarTodos('arquivos').then(r => { out.arquivos = r.map(enriquecerArquivoFs); }),
-        montarMural(usuario).then(r => { out.mural = r; }),
-        pegarTodos('datasImportantes').then(r => { out.datas = r.sort((a, b) => a.data.localeCompare(b.data)); }),
-        pegarTodos('config').then(r => { const cfg = {}; r.forEach(c => { cfg[c.id] = c.valor; }); out.config = cfg; }),
+        marcar('eventos', pegarTodos('eventos')).then(r => { out.events = r; }),
+        marcar('arquivos', pegarTodos('arquivos')).then(r => { out.arquivos = r.map(enriquecerArquivoFs); }),
+        marcar('mural', montarMural(usuario)).then(r => { out.mural = r; }),
+        marcar('datasImportantes', pegarTodos('datasImportantes')).then(r => { out.datas = r.sort((a, b) => a.data.localeCompare(b.data)); }),
+        marcar('config', pegarTodos('config')).then(r => { const cfg = {}; r.forEach(c => { cfg[c.id] = c.valor; }); out.config = cfg; }),
       ];
       if (usuario) {
-        tarefas.push(pegarOnde('acompanhados', 'usuario', String(usuario).toLowerCase()).then(r => { out.followed = r.map(x => x.eventoId); }));
-        tarefas.push(pegarOnde('notas', 'usuario', String(usuario).toLowerCase()).then(r => { out.notas = r; }));
-        tarefas.push(FB().getDoc(docRef('usuarios', String(usuario).toLowerCase())).then(s => { out.nomeReal = s.exists() ? (s.data().nome || '') : ''; }));
+        tarefas.push(marcar('acompanhados', pegarOnde('acompanhados', 'usuario', String(usuario).toLowerCase())).then(r => { out.followed = r.map(x => x.eventoId); }));
+        tarefas.push(marcar('notas', pegarOnde('notas', 'usuario', String(usuario).toLowerCase())).then(r => { out.notas = r; }));
+        tarefas.push(marcar('usuarios/' + usuario, FB().getDoc(docRef('usuarios', String(usuario).toLowerCase()))).then(s => { out.nomeReal = s.exists() ? (s.data().nome || '') : ''; }));
       } else { out.followed = []; out.notas = []; out.nomeReal = ''; }
 
       const souPresidente = String(usuario || '').trim().toLowerCase() === 'presidente';
@@ -1334,15 +1306,15 @@ const Remote = {
         // — coleção que qualquer usuário logado já pode ler.
         out.versionAvaliacoes = agora;
         out.versionDiscentes = agora;
-        tarefas.push(pegarTodos('avaliacoes').then(r => { out.avaliacoes = r; }));
-        tarefas.push(pegarTodos('usuarios').then(r => {
+        tarefas.push(marcar('avaliacoes', pegarTodos('avaliacoes')).then(r => { out.avaliacoes = r; }));
+        tarefas.push(marcar('usuarios(todos)', pegarTodos('usuarios')).then(r => {
           out.discentes = r.filter(u => u.id !== 'presidente').map(u => ({ usuario: u.id, nome: u.nome || '', email: u.email || '', matricula: u.matricula || '', telefone: u.telefone || '', temSenhaNotas: !!u.senhaNotasHash }));
           const lista = r.filter(u => /^\d{2}-\d{2}$/.test(u.aniversario || '')).map(u => ({ usuario: u.id, nome: u.nome || '', aniversario: u.aniversario }));
           out.aniversariantes = lista;
           FB().setDoc(docRef('config', 'aniversariantes'), { lista }, { merge: true }).catch(() => { /* não crítico */ });
         }));
       } else {
-        tarefas.push(FB().getDoc(docRef('config', 'aniversariantes')).then(s => {
+        tarefas.push(marcar('config/aniversariantes', FB().getDoc(docRef('config', 'aniversariantes'))).then(s => {
           out.aniversariantes = (s.exists() && Array.isArray(s.data().lista)) ? s.data().lista : [];
         }).catch(() => { out.aniversariantes = []; }));
       }
@@ -2508,9 +2480,6 @@ function logout(msg) {
   state.minhasNotas = null;
   state.notasToken = null;
   loginRole = 'user';
-  if (!IS_DEMO && window.Firebase && window.Firebase.auth.currentUser) {
-    window.Firebase.signOut(window.Firebase.auth).catch(() => {});
-  }
   renderLogin(msg);
 }
 
