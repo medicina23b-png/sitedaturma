@@ -2,29 +2,28 @@
 
 Site da turma, agora hospedado assim:
 
-- **Frontend** (`public/index.html`): hospedado no **Netlify**, publicado automaticamente a cada `git push` no **GitHub**.
-- **Backend**: **Firebase** — Firestore (banco de dados), Cloud Functions (regras de negócio, e-mails, PDF do calendário) e Firebase Auth (login). Sem Firebase Storage (por escolha) — "Arquivos da Turma" funciona só por link (Google Drive, Docs, Slides etc.), nunca por upload de arquivo binário.
+- **Frontend** (`index.html`, na raiz do repositório): hospedado no **Cloudflare Pages**, publicado automaticamente a cada `git push` no **GitHub**.
+- **Backend**: **Firebase** — só Firestore (banco de dados) e Firebase Authentication (login). Sem Cloud Functions e sem Firebase Storage (por escolha, pra não depender do plano Blaze/cartão de crédito) — "Arquivos da Turma" funciona só por link (Google Drive, Docs, Slides etc.), e toda a lógica roda no navegador + regras do Firestore.
 - O **Google Apps Script/Google Sheets antigos não são mais usados** pelo site. A planilha só serve, uma única vez, de fonte para o script de migração (`scripts/migrate.js`).
 
 Este documento é o roteiro completo, passo a passo, para colocar tudo isso no ar. Não é preciso saber programar — é só seguir a ordem.
 
 ### O que é automático e o que não tem como automatizar
 
-O frontend (`public/`) publica sozinho a cada `git push`, porque o Netlify já está conectado ao GitHub. O backend (Functions/Firestore) você publica do seu computador com um comando (passo 3.3/3.4) sempre que mudar algo ali — não tem GitHub Actions, não tem segredo pra configurar, não tem chave de conta de serviço pra gerenciar. É:
+O frontend (`index.html`, na raiz) publica sozinho a cada `git push`, pelo Cloudflare Pages (passo 8) — conta grátis, sem cartão. O backend é só Firestore + Firebase Authentication, também grátis, sem Blaze e sem cartão. É:
 
-1. Ativar Firestore e Authentication no Console do Firebase (1.2) — alguns cliques, uma vez.
-2. Colocar o projeto no plano **Blaze** (pago por uso, exigido pelas Cloud Functions) — a turma fica, na prática, dentro da faixa gratuita mensal.
-3. Guardar a senha do presidente em segredo (3.1) — um comando, uma vez.
-4. Publicar Functions/regras (3.3) — um comando (`firebase deploy ...`), repetido só quando você mudar algo em `functions/` ou `firestore.rules`.
-5. Rodar a migração dos dados (5) — uma vez, com os dados que você já tem.
+1. Ativar Firestore no Console do Firebase (1.2) — alguns cliques, uma vez.
+2. Publicar as regras do Firestore (3.3) — um comando (`firebase deploy --only firestore:rules`), repetido só quando você mudar algo em `firestore.rules`.
+3. Rodar a migração dos dados (5) — uma vez, com os dados que você já tem (ela também cria o login de cada discente).
+4. Ligar o Cloudflare Pages (8) — alguns cliques, uma vez.
 
 ---
 
 ## 0. O que você vai precisar
 
 - Uma conta Google (para o Firebase) — pode ser a mesma do Apps Script antigo.
-- Uma conta no [GitHub](https://github.com) (para guardar o código e conectar no Netlify).
-- Uma conta no [Netlify](https://netlify.com) (pode entrar direto com a conta do GitHub).
+- Uma conta no [GitHub](https://github.com) (guarda o código).
+- Uma conta no [Cloudflare](https://dash.cloudflare.com/sign-up) (publica o site — veja o passo 8; é grátis, sem cartão).
 - O [Node.js](https://nodejs.org) instalado no seu computador (versão 20 ou mais nova), só para rodar os comandos abaixo.
 - Uma conta de e-mail que o site vai usar para mandar os avisos (pode ser um Gmail comum, com "senha de app" — explico no passo 4).
 
@@ -37,7 +36,7 @@ O projeto já existe no Firebase Console com o nome **turma23b** (foi criado par
 ### 1.1 Criar o projeto (só se ainda não existir)
 
 1. Acesse [console.firebase.google.com](https://console.firebase.google.com) e clique em **Adicionar projeto**.
-2. Nome do projeto: `turma23b` (ou o nome que preferir — se for outro nome, troque os valores de `firebaseConfig` dentro de `public/index.html`, no `<script type="module">` do `<head>`, e o `default` em `.firebaserc`).
+2. Nome do projeto: `turma23b` (ou o nome que preferir — se for outro nome, troque os valores de `firebaseConfig` dentro de `index.html` (na raiz), no `<script type="module">` do `<head>`, e o `default` em `.firebaserc`).
 3. Pode desativar o Google Analytics se não quiser, ou deixar ativado (o site já está preparado pra usar).
 
 ### 1.2 Ativar os produtos usados
@@ -45,7 +44,7 @@ O projeto já existe no Firebase Console com o nome **turma23b** (foi criado par
 Dentro do projeto, no menu da esquerda:
 
 1. **Authentication** → aba "Sign-in method" → não é preciso ativar nenhum provedor específico (o login usa "tokens personalizados", que já vem liberado por padrão).
-2. **Firestore Database** → **Criar banco de dados** → modo de produção → escolha a região `southamerica-east1` (São Paulo — mais perto da turma; se escolher outra, troque também em `functions/index.js`, na linha com `region: 'southamerica-east1'`, e no `<script type="module">` do `index.html`, na linha `getFunctions(app, 'southamerica-east1')`).
+2. **Firestore Database** → **Criar banco de dados** → modo de produção → escolha a região `southamerica-east1` (São Paulo — mais perto da turma).
 3. **Functions** → será ativado automaticamente no primeiro `firebase deploy` (passo 3). Ele pede para colocar o projeto no plano **Blaze** (pago por uso) — é obrigatório para usar Cloud Functions; o uso de uma turma de faculdade fica, na prática, dentro da faixa gratuita mensal do Firebase.
 
 (Não é preciso ativar o **Storage** — este projeto não usa, por escolha: "Arquivos da Turma" funciona só por link.)
@@ -65,7 +64,7 @@ Isso abre o navegador para você entrar com a conta Google do projeto.
 
 ## 2. Baixar este projeto para o seu computador
 
-Se você recebeu este projeto como uma pasta/zip, extraia e abra um terminal dentro dela (a pasta que contém `firebase.json`, `public/`, `functions/`, etc.). Depois:
+Se você recebeu este projeto como uma pasta/zip, extraia e abra um terminal dentro dela (a pasta que contém `firebase.json`, `index.html`, `scripts/`, etc.). Depois:
 
 ```bash
 firebase use --add
@@ -75,60 +74,22 @@ Escolha o projeto `turma23b` e dê o nome de alias `default` quando perguntado (
 
 ---
 
-## 3. Configurar a senha do presidente e publicar as Cloud Functions
+## 3. Publicar as regras do Firestore (sem terminal, direto no Console)
 
-### 3.1 Guardar a senha do presidente em segredo
+Este projeto **não usa Cloud Functions** (por escolha, pra não exigir o plano Blaze/cartão de crédito), **não usa GitHub Actions** e **não precisa de Cloud Shell nem de CLI nenhuma**. Login, notas, notificações etc. rodam direto no navegador, autorizados pelas regras do arquivo `firestore.rules` — e dá pra publicar essas regras colando o texto direto no site do Firebase:
 
-A senha do presidente **não fica escrita em nenhum arquivo** — ela é guardada criptografada no "Secret Manager" do Firebase:
+1. Abra o [Firebase Console](https://console.firebase.google.com/project/turma23b/firestore/rules) → projeto `turma23b` → **Firestore Database** → aba **Regras**.
+2. Abra o arquivo `firestore.rules` deste projeto num editor de texto (Bloco de Notas, VS Code, o que tiver), selecione tudo e copie.
+3. Cole no editor de regras do Firebase Console, substituindo o que já estava escrito ali.
+4. Clique em **Publicar**.
 
-```bash
-firebase functions:secrets:set PRESIDENTE_SENHA
-```
-
-Vai pedir para digitar a senha (a mesma que o presidente vai usar para entrar no site). Pode trocar essa senha depois, repetindo o mesmo comando.
-
-### 3.2 Instalar as dependências das Functions
-
-```bash
-cd functions
-npm install
-cd ..
-```
-
-### 3.3 Publicar Functions e Regras do Firestore
-
-```bash
-firebase deploy --only functions,firestore:rules
-```
-
-Isso leva alguns minutos na primeira vez. No final, o terminal mostra uma lista de URLs — **copie a URL da função `icsFeed`** (algo como `https://southamerica-east1-turma23b.cloudfunctions.net/icsFeed`). Você vai usar essa URL no passo 6.
-
-**Observação sobre os lembretes automáticos de evento** (`enviarLembretesEventos`): essa função roda sozinha a cada 5 minutos (usando o Cloud Scheduler do Google) — não precisa fazer nada além do `firebase deploy` acima. Só na primeira vez, o terminal pode pedir para confirmar a ativação das APIs **Cloud Scheduler** e **Cloud Pub/Sub** (responda "y"/sim); se isso não acontecer automaticamente, ative as duas em [console.cloud.google.com/apis/library](https://console.cloud.google.com/apis/library) (busque pelo nome) e rode o deploy de novo.
-
-### 3.4 Quando mudar `functions/` ou `firestore.rules` de novo
-
-Este projeto **não usa GitHub Actions** — o GitHub só guarda o código e alimenta o Netlify (que publica `public/` sozinho a cada `git push`). Backend (Functions/Firestore) é publicado direto do seu computador, com o comando do passo 3.3:
-
-```bash
-firebase deploy --only functions,firestore:rules
-```
-
-Repita esse único comando sempre que alterar algo em `functions/index.js` ou `firestore.rules`. Como você já está logado (`firebase login`, passo 1.3) com a sua própria conta Google — dona do projeto — não existe segredo, chave ou permissão extra para configurar: sua conta já tem acesso total.
+Repita isso sempre que esse arquivo mudar (por exemplo, numa atualização futura que eu te mandar).
 
 ---
 
-## 4. Configurar o envio de e-mails (extensão "Trigger Email")
+## 4. E-mails de aviso (não disponível nesta versão)
 
-O site escreve os e-mails numa "fila" (coleção `mail` do Firestore) e uma extensão oficial do Firebase (`firestore-send-email`) é quem efetivamente os envia por SMTP.
-
-1. No Firebase Console, vá em **Extensions** (menu da esquerda) → **Explorar extensões** → procure **"Trigger Email"** (publicada pela própria Google/Firebase) → **Instalar**.
-2. Durante a instalação, configure:
-   - **Collection path**: `mail` (tem que ser exatamente esse nome, é o que as Cloud Functions usam).
-   - **SMTP connection URI**: os dados do seu provedor de e-mail. Para Gmail, algo como `smtps://SEU_EMAIL%40gmail.com:SENHA_DE_APP@smtp.gmail.com:465` — a "senha de app" (não é a senha normal da conta) se cria em [myaccount.google.com/apppasswords](https://myaccount.google.com/apppasswords), com a verificação em duas etapas ativada.
-   - **Default FROM address**: o e-mail que vai aparecer como remetente (ex.: `Turma 23B <seu_email@gmail.com>`).
-3. Finalize a instalação (também leva alguns minutos).
-
-Se pular este passo, o site continua funcionando normalmente — só os e-mails de aviso não saem (ficam só as notificações dentro do próprio site, que não dependem disso).
+Sem Cloud Functions, o site não manda e-mail — os avisos (mural, evento alterado) aparecem só como notificação dentro do próprio site/app (sininho + notificação do sistema, se a pessoa tiver instalado o PWA). Isso é suficiente pro uso do dia a dia; se um dia quiser e-mail também, é possível adicionar depois.
 
 ---
 
@@ -157,19 +118,21 @@ Pode rodar de novo sem problema — ele não duplica nada (sempre sobrescreve os
 
 **⚠️ Sobre `scripts/data/dados-turma.xlsx`**: esse arquivo tem dados pessoais reais da turma — nomes, e-mails, telefones e as senhas da aba "Notas" em **texto puro** (como estavam na planilha). Por isso ele já está no `.gitignore` e **nunca deve ir para o GitHub**, nem em repositório privado. Ele só precisa existir na sua máquina no momento de rodar `node migrate.js`; depois pode apagá-lo com segurança — a partir daí os dados moram só no Firestore (lá, a senha de Notas já fica guardada com hash, nunca em texto puro).
 
+### 5.3 Ligar o login (um clique, nenhuma conta pra criar à mão)
+
+Login agora é bem simples: **cada discente entra só com o usuário** (primeiro nome em letra minúscula — ex.: `alexandre`), **sem senha nenhuma**; só o **presidente** tem senha, fixa: `23b23b`.
+
+Nenhuma conta precisa ser criada à mão — o próprio site cria a conta de cada pessoa (no Firebase Authentication) na primeira vez que ela entra. Só falta UM clique, uma vez:
+
+1. No [Firebase Console](https://console.firebase.google.com/project/turma23b/authentication/providers) → **Authentication** → aba **Sign-in method** → clique em **E-mail/senha** → **Ativar** → **Salvar**.
+
+Pronto. Teste entrando com o usuário de um discente (sem senha) ou com `presidente` / `23b23b`.
+
 ---
 
-## 6. Preencher a URL do calendário (iCalendar) no site
+## 6. Assinar calendário (Google Calendar/iCal) — não disponível nesta versão
 
-1. Abra `public/index.html` num editor de texto.
-2. Procure por `ICS_URL: ''` (dentro do bloco `const CONFIG = {`).
-3. Cole ali a URL da função `icsFeed` que você copiou no passo 3.3, por exemplo:
-   ```js
-   ICS_URL: 'https://southamerica-east1-turma23b.cloudfunctions.net/icsFeed',
-   ```
-4. Salve o arquivo.
-
-Sem isso, o botão "Assinar no calendário" continua aparecendo, só que avisando que ainda falta configurar.
+Esse recurso precisava de um endereço de internet que gerasse o arquivo do calendário toda vez que alguém assinasse — isso exigia Cloud Functions, que tiramos do projeto (por escolha, pra não precisar do plano Blaze/cartão). O botão "Assinar no calendário" continua no site, só avisando que falta configurar; o cronograma em si continua funcionando normalmente dentro do site.
 
 ---
 
@@ -180,7 +143,7 @@ Dentro da pasta do projeto:
 ```bash
 git init
 git add .
-git commit -m "Site da Turma 23B — Firebase + Netlify"
+git commit -m "Site da Turma 23B — Firebase + Cloudflare Pages"
 ```
 
 Depois, crie um repositório novo (privado, de preferência) no GitHub, pelo site, e siga as instruções que o próprio GitHub mostra para "enviar um repositório já existente":
@@ -193,19 +156,20 @@ git push -u origin main
 
 ---
 
-## 8. Conectar o Netlify ao GitHub
+## 8. Publicar o site com o Cloudflare Pages (grátis, sem cartão)
 
-1. Entre em [app.netlify.com](https://app.netlify.com) → **Add new site** → **Import an existing project** → **GitHub** → autorize e escolha o repositório que você acabou de criar.
-2. As configurações de build já estão prontas no arquivo `netlify.toml` deste projeto (pasta publicada: `public`), então pode deixar os campos como o Netlify sugerir e clicar em **Deploy**.
-3. Depois do primeiro deploy, o Netlify dá um endereço tipo `https://nome-aleatorio.netlify.app`. Em **Site settings → Domain management** você pode trocar para um nome melhor (ex.: `turma23b.netlify.app`) ou ligar um domínio próprio.
+1. Crie uma conta em [dash.cloudflare.com/sign-up](https://dash.cloudflare.com/sign-up) (ou entre se já tiver).
+2. **Workers & Pages** (menu da esquerda) → **Create** → aba **Pages** → **Connect to Git** → autorize o GitHub e escolha o repositório.
+3. Em **Build settings**: deixe **Build command** vazio e **Build output directory** como `/` (ou deixe em branco — o site é só HTML estático na raiz, não tem build nenhum).
+4. **Save and Deploy**. Em 1-2 minutos o Cloudflare mostra o endereço do site, algo como `https://sitedaturma.pages.dev`.
 
-A partir de agora, **todo `git push` no GitHub publica automaticamente** a nova versão no Netlify — não precisa fazer nada manual depois disso.
+A partir de agora, **todo `git push` no GitHub publica automaticamente** a nova versão ali — não precisa fazer nada manual depois disso. Funciona com o repositório público ou privado, sem diferença de preço (sempre grátis nesse uso).
 
 ---
 
 ## 9. Testar
 
-1. Abra o site publicado pelo Netlify.
+1. Abra o site publicado pelo Cloudflare Pages.
 2. Entre como presidente (usuário `presidente`, a senha configurada no passo 3.1).
 3. Confirme que o cronograma, mural, arquivos e notas aparecem com os dados migrados.
 4. Entre como um discente e confira o sino de notificações, o botão "Acompanhar Todos os eventos que estou Citado" (na aba Eventos Acompanhados) e o link de assinatura de calendário.
@@ -246,12 +210,10 @@ Pra confirmar qual é: Console do Firebase → **Functions** → clique na funç
 ## Estrutura do projeto
 
 ```
-public/            → o site em si (único arquivo index.html + ícones), publicado no Netlify
-functions/          → Cloud Functions (toda a lógica de servidor, equivalente ao antigo Code.gs)
-scripts/migrate.js  → script de migração (roda uma única vez)
+index.html, manifest.json, sw.js, ícones → o site em si, na raiz, publicado pelo Cloudflare Pages
+scripts/migrate.js  → script de migração + criação dos logins (roda uma única vez)
 scripts/data/dados-turma.xlsx → dados reais da turma pra migração — NUNCA commitar (já no .gitignore)
 scripts/make_favicon.py → script que gerou os ícones/favicon (não precisa rodar de novo)
-firestore.rules     → regras de segurança do banco de dados
+firestore.rules     → regras de segurança do banco de dados (toda a lógica de autorização, sem Cloud Functions)
 firebase.json, .firebaserc, firestore.indexes.json → configuração do Firebase
-netlify.toml        → configuração do Netlify
 ```

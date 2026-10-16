@@ -1,0 +1,13 @@
+node_modules/
+.firebase/
+firebase-debug*.log
+.env
+.DS_Store
+*.local.json
+serviceAccountKey*.json
+scripts/sheets-service-account.json
+scripts/firebase-service-account.json
+# Dados reais da turma (nomes, e-mails, telefones, senhas da aba Notas em
+# texto puro) — NUNCA deve ir pro GitHub, nem em repositório privado. Só
+# precisa existir localmente no momento de rodar "node migrate.js".
+scripts/data/*.xlsx

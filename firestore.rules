@@ -3,27 +3,21 @@ rules_version = '2';
 // ============================================================================
 // Regras de segurança — Cronograma Acadêmico (Turma 23B)
 //
-// Modelo de autenticação: Firebase Authentication com TOKEN PERSONALIZADO
-// (custom token), emitido pela Cloud Function "login" depois de validar o
-// usuário (e, para o presidente, a senha) contra a coleção "usuarios" / o
-// segredo PRESIDENTE_SENHA. O token carrega duas "custom claims":
-//   role    -> 'presidente' ou 'user'
-//   usuario -> o nome de usuário (ex.: "aluno01"), sempre em minúsculas
-//
-// Por que custom token em vez de e-mail/senha do Firebase Auth: o pedido foi
-// manter o MESMO login simples (usuário, e senha só para o presidente), só
-// que validado no servidor antes de liberar o Firestore — exatamente o que
-// um custom token faz. E como o Firebase Auth SDK persiste a sessão sozinho
-// (IndexedDB, sobrevive a fechar o navegador), acaba o motivo de existir o
-// "link pessoal de acesso" por usuário.
+// Modelo de autenticação: Firebase Authentication com e-mail/senha. As contas
+// são criadas À MÃO no Firebase Console (Authentication → Users → Add user),
+// uma por discente + a do presidente — sem nenhum script, sem CLI. Por isso
+// estas regras NÃO usam "custom claims" (que só dariam pra gravar com um
+// script/Admin SDK): o nome de usuário e o cargo são extraídos direto do
+// e-mail da conta, que segue sempre o padrão "<usuario>@turma23b.local"
+// (e "presidente@turma23b.local" pro presidente). Esse e-mail nunca recebe
+// nenhum e-mail de verdade — é só um "nome" que o Firebase Auth exige.
 // ============================================================================
 service cloud.firestore {
   match /databases/{database}/documents {
 
     function signedIn() { return request.auth != null; }
-    function role() { return signedIn() ? request.auth.token.role : null; }
-    function meu() { return signedIn() ? request.auth.token.usuario : null; }
-    function presidente() { return role() == 'presidente'; }
+    function meu() { return signedIn() ? request.auth.token.email.split('@')[0] : null; }
+    function presidente() { return meu() == 'presidente'; }
     function dono(usuarioDoCampo) { return signedIn() && meu() == usuarioDoCampo; }
 
     // ---------------- Eventos (cronograma) ----------------
@@ -89,15 +83,13 @@ service cloud.firestore {
     }
 
     // ---------------- Avaliações (notas de prova) ----------------
-    // O PRESIDENTE lê a coleção inteira direto (aba "Envio de Notas"). Um
-    // discente NUNCA lê daqui — ele só recebe a própria nota de volta pela
-    // Cloud Function readNotasAluno, depois de confirmar a senha individual
-    // da aba Notas (mesmo modelo do Code.gs). Escrita só pelas Cloud
-    // Functions (saveAvaliacao/saveAvaliacoesEmLote/deleteAvaliacao), que
-    // usam o Admin SDK e por isso nem passam por esta regra.
+    // O PRESIDENTE lê/escreve a coleção inteira (aba "Envio de Notas"). Um
+    // discente só lê as PRÓPRIAS notas — e mesmo assim, o site só mostra essa
+    // tela depois que ele confirma a segunda senha (campo senhaNotasHash em
+    // usuarios/{usuario}), checada no navegador antes de pedir estes dados.
     match /avaliacoes/{id} {
-      allow read: if presidente();
-      allow write: if false;
+      allow read: if presidente() || (signedIn() && resource.data.usuario == meu());
+      allow write: if presidente();
     }
 
     // ---------------- Coordenador da Tutoria (sessão por evento) ----------------
@@ -117,16 +109,11 @@ service cloud.firestore {
     }
 
     // ---------------- Semestres arquivados ----------------
-    // Só o presidente consegue ver a lista/abrir um semestre arquivado (igual
-    // ao Code.gs: discente nunca lê isso). A gravação é feita só pela Cloud
-    // Function encerrarSemestre (Admin SDK).
+    // Só o presidente consegue ver/criar a lista de semestres arquivados
+    // (igual ao Code.gs: discente nunca lê isso). Gravado pelo próprio
+    // navegador do presidente ao "Encerrar o semestre".
     match /semestres/{id} {
-      allow read: if presidente();
-      allow write: if false;
-      match /{sub=**} {
-        allow read: if presidente();
-        allow write: if false;
-      }
+      allow read, write: if presidente();
     }
     // Notas de semestres encerrados: de propósito, ningúem acessa pelo app —
     // só quem abrir o Firebase Console diretamente (mesmo espírito da aba
@@ -136,25 +123,26 @@ service cloud.firestore {
     }
 
     // ---------------- Notificações no app (novo) ----------------
+    // Sem Cloud Functions, é o próprio navegador de quem publica (presidente)
+    // que grava a notificação na caixinha de cada discente; e é o próprio
+    // navegador de cada discente que grava (só na própria caixinha) os
+    // lembretes de evento que ele mesmo detectou enquanto o site está aberto.
     match /notificacoes/{usuario}/itens/{id} {
       allow read, update, delete: if dono(usuario);
-      // Criadas só pelas Cloud Functions (fan-out via Admin SDK) — nunca
-      // diretamente pelo cliente, pra ninguém conseguir "notificar a si
-      // mesmo" fora do fluxo real (mural/evento alterado).
-      allow create: if false;
+      allow create: if presidente() || dono(usuario);
     }
 
-    // ---------------- Fila de e-mail (extensão "Trigger Email") ----------------
+    // ---------------- Fila de e-mail (não usada; sem Cloud Functions/Storage) ----------------
     match /mail/{id} {
       allow read, write: if false;
     }
 
     // ---------------- Controle de lembretes de evento já enviados ----------------
-    // Só a Cloud Function agendada (enviarLembretesEventos, via Admin SDK)
-    // lê/escreve aqui — guarda quais lembretes (1 dia/1 hora/30 min) de cada
-    // evento já foram mandados, pra nunca duplicar.
-    match /lembretesEnviados/{eventoId} {
-      allow read, write: if false;
+    // Cada discente controla só os PRÓPRIOS lembretes (1 dia/1 hora/30 min),
+    // calculados no navegador dele enquanto o site está aberto — por isso é
+    // uma subcoleção por usuário, igual a "notificacoes" acima.
+    match /lembretesEnviados/{usuario}/itens/{id} {
+      allow read, write: if dono(usuario);
     }
   }
 }
