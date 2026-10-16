@@ -1324,17 +1324,27 @@ const Remote = {
         tarefas.push(pegarOnde('notas', 'usuario', String(usuario).toLowerCase()).then(r => { out.notas = r; }));
         tarefas.push(FB().getDoc(docRef('usuarios', String(usuario).toLowerCase())).then(s => { out.nomeReal = s.exists() ? (s.data().nome || '') : ''; }));
       } else { out.followed = []; out.notas = []; out.nomeReal = ''; }
-      tarefas.push(pegarTodos('usuarios').then(r => {
-        out.aniversariantes = r.filter(u => /^\d{2}-\d{2}$/.test(u.aniversario || '')).map(u => ({ usuario: u.id, nome: u.nome || '', aniversario: u.aniversario }));
-      }));
 
-      if (String(usuario || '').trim().toLowerCase() === 'presidente') {
+      const souPresidente = String(usuario || '').trim().toLowerCase() === 'presidente';
+      if (souPresidente) {
+        // O presidente é o único autorizado (pelas regras) a listar a coleção
+        // "usuarios" inteira. Pra quem não é presidente também ver os
+        // aniversariantes sem precisar dessa permissão, o presidente publica
+        // aqui uma listinha pública (só nome+aniversário) em config/aniversariantes
+        // — coleção que qualquer usuário logado já pode ler.
         out.versionAvaliacoes = agora;
         out.versionDiscentes = agora;
         tarefas.push(pegarTodos('avaliacoes').then(r => { out.avaliacoes = r; }));
         tarefas.push(pegarTodos('usuarios').then(r => {
           out.discentes = r.filter(u => u.id !== 'presidente').map(u => ({ usuario: u.id, nome: u.nome || '', email: u.email || '', matricula: u.matricula || '', telefone: u.telefone || '', temSenhaNotas: !!u.senhaNotasHash }));
+          const lista = r.filter(u => /^\d{2}-\d{2}$/.test(u.aniversario || '')).map(u => ({ usuario: u.id, nome: u.nome || '', aniversario: u.aniversario }));
+          out.aniversariantes = lista;
+          FB().setDoc(docRef('config', 'aniversariantes'), { lista }, { merge: true }).catch(() => { /* não crítico */ });
         }));
+      } else {
+        tarefas.push(FB().getDoc(docRef('config', 'aniversariantes')).then(s => {
+          out.aniversariantes = (s.exists() && Array.isArray(s.data().lista)) ? s.data().lista : [];
+        }).catch(() => { out.aniversariantes = []; }));
       }
       await Promise.all(tarefas);
       return out;
@@ -2419,6 +2429,7 @@ async function sync(opts) {
     if (changed) refreshUI();
   } catch (e) {
     setSync('error');
+    console.error('Falha ao sincronizar:', e);
     if (!silent) toast(e.message || 'Não foi possível sincronizar.', 'err');
   } finally {
     syncing = false;
