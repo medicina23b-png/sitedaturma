@@ -42,7 +42,51 @@
 
 const path = require('path');
 const fs = require('fs');
+const readline = require('readline');
 const XLSX = require('xlsx');
+
+// Senha "técnica" usada para os discentes entrarem — ninguém digita ela (o
+// site não pede senha pro aluno, só o usuário, igual sempre foi). Ela só
+// existe pra abrir uma sessão do Firebase Authentication (que é grátis e não
+// exige Cloud Functions nem plano Blaze). Precisa ser IDÊNTICA à constante
+// SENHA_TECNICA_DISCENTE em public/index.html.
+const SENHA_TECNICA_DISCENTE = 'turma23b-sessao-2026-sem-senha-';
+
+function perguntarSenhaPresidente() {
+  if (process.env.PRESIDENTE_SENHA) return Promise.resolve(process.env.PRESIDENTE_SENHA);
+  return new Promise((resolve) => {
+    const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
+    rl.question('Digite a senha que o PRESIDENTE vai usar para entrar no site: ', (resposta) => {
+      rl.close();
+      resolve(String(resposta || '').trim());
+    });
+  });
+}
+
+async function criarOuAtualizarConta(admin, uid, email, senha, claims) {
+  try {
+    await admin.auth().updateUser(uid, { email, password: senha });
+  } catch (err) {
+    if (err.code === 'auth/user-not-found') {
+      await admin.auth().createUser({ uid, email, password: senha });
+    } else {
+      throw err;
+    }
+  }
+  await admin.auth().setCustomUserClaims(uid, claims);
+}
+
+async function sincronizarContasAuth(admin, usuarios) {
+  console.log('\nCriando/atualizando contas de acesso (Firebase Authentication — grátis, sem Blaze)...');
+  const senhaPresidente = await perguntarSenhaPresidente();
+  if (!senhaPresidente) throw new Error('Senha do presidente não pode ser vazia.');
+  await criarOuAtualizarConta(admin, 'presidente', 'presidente@turma23b.local', senhaPresidente, { role: 'presidente', usuario: 'presidente' });
+  for (const l of usuarios) {
+    const usuario = String(l.usuario).trim().toLowerCase();
+    await criarOuAtualizarConta(admin, usuario, usuario + '@turma23b.local', SENHA_TECNICA_DISCENTE + usuario, { role: 'user', usuario });
+  }
+  console.log('  ' + (usuarios.length + 1) + ' conta(s) de acesso pronta(s).');
+}
 const admin = require('firebase-admin');
 const crypto = require('crypto');
 
@@ -137,6 +181,7 @@ async function main() {
     matricula: l.matricula || '', telefone: l.telefone || '',
     senhaNotasHash: l.senhaNotas ? hashSenha(l.senhaNotas) : '',
   }));
+  await sincronizarContasAuth(admin, usuarios);
 
   // ---------- Acompanhados ----------
   const acomp = lerAba('Acompanhados', COLS_ACOMP);
