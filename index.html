@@ -1731,10 +1731,6 @@ const Remote = {
     } catch (err) { throw toApiError(err); }
   },
 
-  salvarConfiguracaoSemestre: (token, config) => chamarFuncao('salvarConfiguracaoSemestre', { config }),
-  encerrarSemestre: (token, rotulo) => chamarFuncao('encerrarSemestre', { rotulo }),
-  listarSemestres: token => chamarFuncao('listarSemestres', {}),
-  lerSemestreArquivado: (token, id) => chamarFuncao('lerSemestreArquivado', { id }),
 };
 
 // Mesma validação de uma avaliação (nota), usada tanto pro lançamento único
