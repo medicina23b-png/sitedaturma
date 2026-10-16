@@ -1302,20 +1302,23 @@ const Remote = {
   async sync(usuario, v, va, vm, vd, vav, vdi, vc) {
     await waitFirebase();
     try {
-      const metaSnap = await FB().getDoc(docRef('meta', 'versions'));
-      const meta = metaSnap.exists() ? metaSnap.data() : {};
-      const version = meta.version || '0', versionArq = meta.versionArq || '0', versionMural = meta.versionMural || '0',
-            versionDatas = meta.versionDatas || '0', versionConfig = meta.versionConfig || '0';
-      const out = { version, versionArq, versionMural, versionDatas, versionConfig, serverTime: new Date().toISOString(), appUrl: '' };
+      // Sem Cloud Functions, não existe mais nada atualizando um contador de
+      // versão central (era isso que decidia "mudou, vale a pena buscar de
+      // novo?"). Mais simples e confiável: busca tudo de novo a cada sync —
+      // o volume de dados de uma turma é pequeno, o custo disso é mínimo.
+      const agora = String(Date.now());
+      const out = {
+        version: agora, versionArq: agora, versionMural: agora, versionDatas: agora, versionConfig: agora,
+        serverTime: new Date().toISOString(), appUrl: '',
+      };
 
-      const tarefas = [];
-      if (String(v || '') !== version) tarefas.push(pegarTodos('eventos').then(r => { out.events = r; }));
-      if (String(va || '') !== versionArq) tarefas.push(pegarTodos('arquivos').then(r => { out.arquivos = r.map(enriquecerArquivoFs); }));
-      if (String(vm || '') !== versionMural) tarefas.push(montarMural(usuario).then(r => { out.mural = r; }));
-      if (String(vd || '') !== versionDatas) tarefas.push(pegarTodos('datasImportantes').then(r => { out.datas = r.sort((a, b) => a.data.localeCompare(b.data)); }));
-      if (String(vc || '') !== versionConfig) {
-        tarefas.push(pegarTodos('config').then(r => { const cfg = {}; r.forEach(c => { cfg[c.id] = c.valor; }); out.config = cfg; }));
-      }
+      const tarefas = [
+        pegarTodos('eventos').then(r => { out.events = r; }),
+        pegarTodos('arquivos').then(r => { out.arquivos = r.map(enriquecerArquivoFs); }),
+        montarMural(usuario).then(r => { out.mural = r; }),
+        pegarTodos('datasImportantes').then(r => { out.datas = r.sort((a, b) => a.data.localeCompare(b.data)); }),
+        pegarTodos('config').then(r => { const cfg = {}; r.forEach(c => { cfg[c.id] = c.valor; }); out.config = cfg; }),
+      ];
       if (usuario) {
         tarefas.push(pegarOnde('acompanhados', 'usuario', String(usuario).toLowerCase()).then(r => { out.followed = r.map(x => x.eventoId); }));
         tarefas.push(pegarOnde('notas', 'usuario', String(usuario).toLowerCase()).then(r => { out.notas = r; }));
@@ -1326,14 +1329,12 @@ const Remote = {
       }));
 
       if (String(usuario || '').trim().toLowerCase() === 'presidente') {
-        out.versionAvaliacoes = meta.versionAvaliacoes || '0';
-        out.versionDiscentes = meta.versionDiscentes || '0';
-        if (String(vav || '') !== out.versionAvaliacoes) tarefas.push(pegarTodos('avaliacoes').then(r => { out.avaliacoes = r; }));
-        if (String(vdi || '') !== out.versionDiscentes) {
-          tarefas.push(pegarTodos('usuarios').then(r => {
-            out.discentes = r.filter(u => u.id !== 'presidente').map(u => ({ usuario: u.id, nome: u.nome || '', email: u.email || '', matricula: u.matricula || '', telefone: u.telefone || '', temSenhaNotas: !!u.senhaNotasHash }));
-          }));
-        }
+        out.versionAvaliacoes = agora;
+        out.versionDiscentes = agora;
+        tarefas.push(pegarTodos('avaliacoes').then(r => { out.avaliacoes = r; }));
+        tarefas.push(pegarTodos('usuarios').then(r => {
+          out.discentes = r.filter(u => u.id !== 'presidente').map(u => ({ usuario: u.id, nome: u.nome || '', email: u.email || '', matricula: u.matricula || '', telefone: u.telefone || '', temSenhaNotas: !!u.senhaNotasHash }));
+        }));
       }
       await Promise.all(tarefas);
       return out;
