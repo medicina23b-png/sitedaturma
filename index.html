@@ -30,40 +30,44 @@
      imports funcionarem) e expõe tudo em window.Firebase, que o script
      principal mais abaixo usa (ver objeto "Remote"). ===================== -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
-  import { getAnalytics, isSupported as analyticsIsSupported } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-analytics.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
+  import { getAnalytics, isSupported as analyticsIsSupported } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics.js";
+  import {
+    getAuth, signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut,
+  } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
   import {
     getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc,
     updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch,
-  } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
+  } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
   // Sem Firebase Storage neste projeto (por escolha) — "Arquivos da Turma"
   // funciona só por link (Google Drive, Docs etc.), então não precisa do
   // SDK de Storage nem do produto Storage ativado no Console.
   // Sem Cloud Functions neste projeto (por escolha, pra não exigir o plano
-  // Blaze/cartão de crédito) e SEM Firebase Authentication (por escolha do
-  // presidente) — toda a lógica de negócio roda no próprio navegador, e o
-  // Firestore fica com leitura/escrita abertas (ver firestore.rules).
+  // Blaze/cartão de crédito) — login usa Firebase Authentication direto, e
+  // toda a lógica de negócio roda no próprio navegador + regras do Firestore.
 
   // Config pública do projeto "turma23b" — não é segredo: a segurança do
   // Firebase vem das regras do Firestore e da validação nas Cloud
   // Functions, não de esconder esta configuração (ela viaja pro navegador
   // de qualquer jeito, em qualquer app Firebase).
   const firebaseConfig = {
-    apiKey: "AIzaSyBWq1IDLGAup_Id4exm5ivLyKgUhPJV_6k",
-    authDomain: "turma23b.firebaseapp.com",
-    projectId: "turma23b",
-    storageBucket: "turma23b.firebasestorage.app",
-    messagingSenderId: "701570035640",
-    appId: "1:701570035640:web:21a2527d746ed2ece0694d",
-    measurementId: "G-0G1T3DP159",
+    apiKey: "AIzaSyAdvBFxOKEFlhYHrdDhCkE1V1PJyAc0U64",
+    authDomain: "cronograma-23b.firebaseapp.com",
+    projectId: "cronograma-23b",
+    storageBucket: "cronograma-23b.firebasestorage.app",
+    messagingSenderId: "918600139865",
+    appId: "1:918600139865:web:48741541fec570cec11d48",
+    measurementId: "G-GLNTR74DV4",
   };
 
   const app = initializeApp(firebaseConfig);
+  const auth = getAuth(app);
   const db = getFirestore(app);
   analyticsIsSupported().then(ok => { if (ok) getAnalytics(app); }).catch(() => {});
 
   window.Firebase = {
-    app, db,
+    app, auth, db,
+    signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut,
     collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
     query, where, orderBy, limit, onSnapshot, writeBatch,
   };
@@ -682,6 +686,16 @@ const CONFIG = {
   // do link.
   ICS_URL: '',
 
+  // Chave pública VAPID do Firebase Cloud Messaging (push com o app fechado).
+  // Console Firebase ▸ Configurações do projeto ▸ Cloud Messaging ▸ "Certificados
+  // push da Web" ▸ Gerar par de chaves ▸ copie a "Chave do par de chaves" aqui.
+  // Enquanto ficar vazia, o app só avisa com ele aberto (como antes).
+  VAPID_KEY: 'BBEisGj2rkOewDt9W49n1GVu52rydm5XXIABOcRkrYN3PL2lKWCr60l3xw2iQ1kxbSZoK1F1DHJFssuVJKYS3fc',
+
+  // Endereço do Worker da Cloudflare que envia os pushes (pasta push-worker/).
+  // Aparece no terminal depois do "wrangler deploy", ex.: https://push-23b.SEU-USUARIO.workers.dev
+  PUSH_URL: '',
+
   // De quanto em quanto tempo o site confere se há novidades (ms). As
   // notificações (sino no topo) chegam na hora, por assinatura em tempo
   // real (onSnapshot); o resto dos dados (cronograma, mural etc.) usa esse
@@ -1108,6 +1122,7 @@ const FB = () => window.Firebase;
 // no mesmo ApiError que o resto do site já sabe tratar — handleApiError()
 // desloga sozinho quando o code é 'AUTH', exatamente como antes.
 function toApiError(err) {
+  try { console.error('[Firebase erro real]', err && err.code, err && err.message); } catch (_) {}
   const code = String((err && err.code) || '');
   const auth = code.indexOf('permission-denied') >= 0 || code.indexOf('unauthenticated') >= 0 || code === 'permission-denied';
   const msg = (err && err.message) ? String(err.message).replace(/^Firebase:\s*/, '').replace(/\s*\(\w[\w-]*\/[\w-]+\)\.?$/, '') : 'Erro no servidor.';
@@ -1134,16 +1149,25 @@ async function pegarOnde(nomeColecao, campo, valor) {
    Sem Cloud Functions: é o próprio navegador do presidente que calcula quem
    precisa ser avisado e grava em notificacoes/{usuario}/itens — autorizado
    pela regra "allow create: if presidente() || dono(usuario)". */
+// Pede ao servidor (Cloudflare) pra enviar já o push das notificações recém-criadas.
+// Se falhar, a função agendada pega no próximo ciclo (até ~5 min depois).
+async function dispararPush() {
+  try {
+    const u = FB().auth.currentUser; if (!u || !CONFIG.VAPID_KEY || !CONFIG.PUSH_URL) return;
+    await fetch(CONFIG.PUSH_URL, { method: 'POST', headers: { Authorization: 'Bearer ' + await u.getIdToken() } });
+  } catch (err) { /* sem problema: o agendador cobre */ }
+}
 async function notificarUsuario(usuario, tipo, titulo, corpo, refId) {
   try {
     await FB().addDoc(FB().collection(FB().db, 'notificacoes', usuario, 'itens'), {
-      tipo, titulo, corpo, refId: refId || '', lida: false, criadoEm: new Date().toISOString(),
+      tipo, titulo, corpo, refId: refId || '', lida: false, pushEnviado: false, criadoEm: new Date().toISOString(),
     });
   } catch (err) { /* nunca trava a ação principal por causa de notificação */ }
 }
 async function notificarTodosDiscentes(tipo, titulo, corpo, refId) {
   const usuarios = await pegarTodos('usuarios');
   await Promise.all(usuarios.filter(u => u.id !== 'presidente').map(u => notificarUsuario(u.id, tipo, titulo, corpo, refId)));
+  dispararPush();
 }
 // Mesma lógica de "estouNesseEvento" (mais abaixo no arquivo), só que
 // checando TODOS os discentes de uma vez, não só quem está logado agora.
@@ -1166,6 +1190,7 @@ async function notificarEventoAlterado(evento, titulo, corpo) {
   ]);
   const publico = Array.from(new Set([...seguidores, ...citados]));
   await Promise.all(publico.map(u => notificarUsuario(u, 'evento', titulo, corpo, evento.id)));
+  dispararPush();
 }
 // Hash SHA-256 (Web Crypto, nativo do navegador) — usado pra conferir a
 // segunda senha da aba Notas sem nunca mandar a senha de ninguém pro
@@ -1239,12 +1264,11 @@ async function montarMural(usuarioAtual) {
   }).sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
 }
 
-// Senha do presidente — fixa. O discente não tem senha nenhuma (só digita o
-// usuário). SEM Firebase Authentication neste projeto (por escolha do
-// presidente): o Firestore fica com leitura/escrita abertas (ver
-// firestore.rules) e quem está "logado" é controlado só pelo navegador de
-// cada um (guardado em localStorage) — não existe mais nenhuma verificação
-// do lado do servidor de quem é quem.
+// Senha "técnica" usada para os discentes entrarem — ninguém digita ela (o
+// site não pede senha pro aluno, só o usuário). O presidente tem senha de
+// verdade, fixa. Nenhuma conta precisa ser criada à mão no Firebase Console:
+// na primeira vez que cada pessoa entra, o próprio site cria a conta dela.
+const SENHA_TECNICA_DISCENTE = 'turma23b-sessao-2026-sem-senha-';
 const SENHA_PRESIDENTE = '23b23b';
 
 const Remote = {
@@ -1253,14 +1277,47 @@ const Remote = {
     const u = String(usuario || '').trim().toLowerCase();
     if (!u) throw new ApiError('Informe o usuário.');
     if (u === 'presidente' && String(senha || '') !== SENHA_PRESIDENTE) throw new ApiError('Senha incorreta.');
+    const email = u + '@turma23b.local';
+    const senhaReal = u === 'presidente' ? SENHA_PRESIDENTE : (SENHA_TECNICA_DISCENTE + u);
+    // Autentica (ou cria a conta, se for a primeira vez) ANTES de olhar o
+    // Firestore — as regras só liberam leitura pra quem já está autenticado,
+    // então checar "o usuário existe?" antes da autenticação sempre seria
+    // negado, mesmo pro usuário certo.
+    let cred;
+    try {
+      cred = await FB().signInWithEmailAndPassword(FB().auth, email, senhaReal);
+    } catch (err) {
+      const code = String((err && err.code) || '');
+      // Versões recentes do Firebase Auth não dizem mais separadamente
+      // "não existe" vs "senha errada" (por segurança, pra ninguém descobrir
+      // por tentativa quais usuários existem) — tudo vira um erro genérico
+      // ("invalid-credential"/"invalid-login-credentials"). Como a senha que
+      // a gente manda já é sempre a certa (é gerada aqui mesmo), um erro
+      // aqui só pode mesmo ser "essa conta ainda não existe" — então cria.
+      const podeSerPrimeiraVez = code.indexOf('user-not-found') >= 0 || code.indexOf('invalid-credential') >= 0 || code.indexOf('invalid-login-credentials') >= 0;
+      if (podeSerPrimeiraVez) {
+        // Primeira vez dessa pessoa — cria a conta sozinho, sem precisar de
+        // ninguém clicar em nada no Firebase Console.
+        try { cred = await FB().createUserWithEmailAndPassword(FB().auth, email, senhaReal); }
+        catch (err2) { throw toApiError(err2); }
+      } else {
+        throw toApiError(err);
+      }
+    }
     const role = u === 'presidente' ? 'presidente' : 'user';
     let nomeReal = '';
     if (role !== 'presidente') {
+      // Agora já autenticado como esse próprio usuário — a regra "dono()"
+      // libera ler o próprio documento. Se não existir, essa pessoa não é
+      // discente de verdade: desfaz a sessão e recusa.
       const snap = await FB().getDoc(docRef('usuarios', u));
-      if (!snap.exists()) throw new ApiError('Usuário não encontrado.');
+      if (!snap.exists()) {
+        await FB().signOut(FB().auth);
+        throw new ApiError('Usuário não encontrado.');
+      }
       nomeReal = snap.data().nome || '';
     }
-    return { role, usuario: u, nomeReal, token: 'local' };
+    return { role, usuario: u, nomeReal, token: 'firebase' };
   },
 
   async sync(usuario, v, va, vm, vd, vav, vdi, vc) {
@@ -1276,25 +1333,17 @@ const Remote = {
         serverTime: new Date().toISOString(), appUrl: '',
       };
 
-      // Cada tarefa é rotulada com o nome da coleção, pra se alguma falhar
-      // (ex.: permission-denied) o Console mostrar exatamente qual foi —
-      // em vez de um erro genérico que não diz onde a regra bloqueou.
-      const marcar = (rotulo, promessa) => promessa.catch(err => {
-        console.error('[sync:' + rotulo + ']', (err && err.code) || '', (err && err.message) || err);
-        throw err;
-      });
-
       const tarefas = [
-        marcar('eventos', pegarTodos('eventos')).then(r => { out.events = r; }),
-        marcar('arquivos', pegarTodos('arquivos')).then(r => { out.arquivos = r.map(enriquecerArquivoFs); }),
-        marcar('mural', montarMural(usuario)).then(r => { out.mural = r; }),
-        marcar('datasImportantes', pegarTodos('datasImportantes')).then(r => { out.datas = r.sort((a, b) => a.data.localeCompare(b.data)); }),
-        marcar('config', pegarTodos('config')).then(r => { const cfg = {}; r.forEach(c => { cfg[c.id] = c.valor; }); out.config = cfg; }),
+        pegarTodos('eventos').then(r => { out.events = r; }),
+        pegarTodos('arquivos').then(r => { out.arquivos = r.map(enriquecerArquivoFs); }),
+        montarMural(usuario).then(r => { out.mural = r; }),
+        pegarTodos('datasImportantes').then(r => { out.datas = r.sort((a, b) => a.data.localeCompare(b.data)); }),
+        pegarTodos('config').then(r => { const cfg = {}; r.forEach(c => { cfg[c.id] = c.valor; }); out.config = cfg; }),
       ];
       if (usuario) {
-        tarefas.push(marcar('acompanhados', pegarOnde('acompanhados', 'usuario', String(usuario).toLowerCase())).then(r => { out.followed = r.map(x => x.eventoId); }));
-        tarefas.push(marcar('notas', pegarOnde('notas', 'usuario', String(usuario).toLowerCase())).then(r => { out.notas = r; }));
-        tarefas.push(marcar('usuarios/' + usuario, FB().getDoc(docRef('usuarios', String(usuario).toLowerCase()))).then(s => { out.nomeReal = s.exists() ? (s.data().nome || '') : ''; }));
+        tarefas.push(pegarOnde('acompanhados', 'usuario', String(usuario).toLowerCase()).then(r => { out.followed = r.map(x => x.eventoId); }));
+        tarefas.push(pegarOnde('notas', 'usuario', String(usuario).toLowerCase()).then(r => { out.notas = r; }));
+        tarefas.push(FB().getDoc(docRef('usuarios', String(usuario).toLowerCase())).then(s => { out.nomeReal = s.exists() ? (s.data().nome || '') : ''; }));
       } else { out.followed = []; out.notas = []; out.nomeReal = ''; }
 
       const souPresidente = String(usuario || '').trim().toLowerCase() === 'presidente';
@@ -1306,21 +1355,21 @@ const Remote = {
         // — coleção que qualquer usuário logado já pode ler.
         out.versionAvaliacoes = agora;
         out.versionDiscentes = agora;
-        tarefas.push(marcar('avaliacoes', pegarTodos('avaliacoes')).then(r => { out.avaliacoes = r; }));
-        tarefas.push(marcar('usuarios(todos)', pegarTodos('usuarios')).then(r => {
+        tarefas.push(pegarTodos('avaliacoes').then(r => { out.avaliacoes = r; }));
+        tarefas.push(pegarTodos('usuarios').then(r => {
           out.discentes = r.filter(u => u.id !== 'presidente').map(u => ({ usuario: u.id, nome: u.nome || '', email: u.email || '', matricula: u.matricula || '', telefone: u.telefone || '', temSenhaNotas: !!u.senhaNotasHash }));
           const lista = r.filter(u => /^\d{2}-\d{2}$/.test(u.aniversario || '')).map(u => ({ usuario: u.id, nome: u.nome || '', aniversario: u.aniversario }));
           out.aniversariantes = lista;
           FB().setDoc(docRef('config', 'aniversariantes'), { lista }, { merge: true }).catch(() => { /* não crítico */ });
         }));
       } else {
-        tarefas.push(marcar('config/aniversariantes', FB().getDoc(docRef('config', 'aniversariantes'))).then(s => {
+        tarefas.push(FB().getDoc(docRef('config', 'aniversariantes')).then(s => {
           out.aniversariantes = (s.exists() && Array.isArray(s.data().lista)) ? s.data().lista : [];
         }).catch(() => { out.aniversariantes = []; }));
       }
       await Promise.all(tarefas);
       return out;
-    } catch (err) { console.error('Remote.sync falhou:', err && err.code, err && err.message, err); throw toApiError(err); }
+    } catch (err) { throw toApiError(err); }
   },
 
   async saveEvent(token, ev) {
@@ -1519,8 +1568,9 @@ const Remote = {
       const faltam = usuariosSnap.docs.filter(d => d.id !== 'presidente' && !lidoPor.has(d.id));
       const agora = new Date().toISOString();
       await Promise.all(faltam.map(d => FB().addDoc(FB().collection(FB().db, 'notificacoes', d.id, 'itens'), {
-        tipo: 'mural', titulo: 'Lembrete: aviso no mural', corpo: avisoSnap.data().titulo || 'Você tem um aviso não lido no mural.', refId: avisoId, lida: false, criadoEm: agora,
+        tipo: 'mural', titulo: 'Lembrete: aviso no mural', corpo: avisoSnap.data().titulo || 'Você tem um aviso não lido no mural.', refId: avisoId, lida: false, pushEnviado: false, criadoEm: agora,
       })));
+      dispararPush();
       return { ok: true, enviados: faltam.length };
     } catch (err) { throw toApiError(err); }
   },
@@ -1703,6 +1753,10 @@ const Remote = {
     } catch (err) { throw toApiError(err); }
   },
 
+  salvarConfiguracaoSemestre: (token, config) => chamarFuncao('salvarConfiguracaoSemestre', { config }),
+  encerrarSemestre: (token, rotulo) => chamarFuncao('encerrarSemestre', { rotulo }),
+  listarSemestres: token => chamarFuncao('listarSemestres', {}),
+  lerSemestreArquivado: (token, id) => chamarFuncao('lerSemestreArquivado', { id }),
 };
 
 // Mesma validação de uma avaliação (nota), usada tanto pro lançamento único
@@ -2473,6 +2527,7 @@ async function doLogin(form) {
 
 function logout(msg) {
   stopPolling();
+  desregistrarPush();
   pararNotificacoes();
   closeModal();
   store.del('cron.session');
@@ -2480,6 +2535,9 @@ function logout(msg) {
   state.minhasNotas = null;
   state.notasToken = null;
   loginRole = 'user';
+  if (!IS_DEMO && window.Firebase && window.Firebase.auth.currentUser) {
+    window.Firebase.signOut(window.Firebase.auth).catch(() => {});
+  }
   renderLogin(msg);
 }
 
@@ -3129,7 +3187,8 @@ function iniciarNotificacoes() {
 function pedirPermissaoNotificacao() {
   try {
     if (!('Notification' in window)) return;
-    if (Notification.permission === 'default') Notification.requestPermission().catch(() => {});
+    if (Notification.permission === 'default') Notification.requestPermission().then(registrarPush).catch(() => {});
+    else registrarPush();
   } catch (err) { /* ignora — não é essencial pro resto do site funcionar */ }
 }
 
@@ -3142,6 +3201,51 @@ async function mostrarNotificacaoDoSistema(titulo, corpo) {
     }
     new Notification(titulo || 'Cronograma Acadêmico', { body: corpo || '' });
   } catch (err) { /* navegador sem suporte, ou permissão negada — ignora */ }
+}
+
+/* ---------- Push de verdade (FCM) — chega com o app fechado ----------
+   Guarda o token do aparelho em pushTokens/{sha256(token)} com o usuário
+   dono; o Worker da Cloudflare (push-worker/)
+   lê essa coleção e dispara o push quando surge uma notificação nova. */
+const PUSH_KEY = 'cron.pushDoc';
+function pushSuportado() {
+  return !IS_DEMO && !!CONFIG.VAPID_KEY && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window && location.protocol !== 'file:';
+}
+async function registrarPush() {
+  try {
+    if (!pushSuportado() || !state.session || Notification.permission !== 'granted') return;
+    const F = await waitFirebase();
+    const M = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js');
+    if (!(await M.isSupported())) return;
+    const reg = await navigator.serviceWorker.ready;
+    const token = await M.getToken(M.getMessaging(F.app), { vapidKey: CONFIG.VAPID_KEY, serviceWorkerRegistration: reg });
+    if (!token) return;
+    const id = await sha256Hex(token);
+    await F.setDoc(F.doc(F.db, 'pushTokens', id), {
+      token, usuario: state.session.usuario, atualizadoEm: new Date().toISOString(),
+      plataforma: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '',
+      standalone: estaStandalone(),
+    });
+    store.set(PUSH_KEY, id);
+  } catch (err) { /* sem push neste aparelho — o resto do app segue normal */ }
+}
+function desregistrarPush() {
+  try {
+    const id = store.get(PUSH_KEY); if (!id || !window.Firebase) return;
+    store.del(PUSH_KEY);
+    window.Firebase.deleteDoc(window.Firebase.doc(window.Firebase.db, 'pushTokens', id)).catch(() => {});
+  } catch (err) { /* ignora */ }
+}
+async function ativarPush() {
+  try {
+    if (!('Notification' in window)) { toast('Este navegador não suporta notificações.'); return; }
+    if (ehIOS() && !estaStandalone()) { toast('No iPhone, instale o app (Compartilhar ▸ Adicionar à Tela de Início) e abra por lá.'); return; }
+    const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
+    if (perm !== 'granted') { toast('Notificações bloqueadas. Libere nas configurações do navegador/aparelho.'); return; }
+    await registrarPush();
+    toast('Notificações ativadas neste aparelho.');
+    if (state.modal === 'notificacoes') abrirNotificacoes(true);
+  } catch (err) { toast('Não foi possível ativar as notificações.'); }
 }
 
 function pararNotificacoes() {
@@ -3167,6 +3271,7 @@ function abrirNotificacoes(reabrindo) {
       <h2>Notificações</h2>
       <button type="button" class="icon-btn" data-action="close-modal" aria-label="Fechar">${icon('x', 18)}</button>
     </div>
+    ${(pushSuportado() && (!('Notification' in window) || Notification.permission !== 'granted')) ? `<div class="notif-item" style="margin-bottom:12px;cursor:default"><span class="notif-body"><b>Receber avisos com o app fechado</b><br><span class="muted">Ative as notificações neste aparelho para ser avisado de mural, mudanças de horário/sala e cancelamentos.</span><br><button class="btn sm" style="margin-top:8px" data-action="ativar-push">Ativar notificações</button></span></div>` : ''}
     ${itens.length ? `<div style="margin-bottom:12px"><button class="btn sm" data-action="marcar-todas-notif-lidas">Marcar todas como lidas</button></div>` : ''}
     ${itens.length ? `<div class="notif-list">${itens.map(n => `
       <button type="button" class="notif-item ${n.lida ? '' : 'is-unread'}" data-action="marcar-notif-lida" data-id="${esc(n.id)}">
@@ -5796,6 +5901,7 @@ document.addEventListener('click', ev => {
     case 'copy-ics': copyIcsLink(); break;
     case 'notificacoes': abrirNotificacoes(); break;
     case 'marcar-notif-lida': marcarNotificacaoLida(el.dataset.id); break;
+    case 'ativar-push': ativarPush(); break;
     case 'marcar-todas-notif-lidas': marcarTodasNotificacoesLidas(); break;
     case 'follow-all-cited': followAllCited(); break;
     case 'install-app': installApp(); break;
