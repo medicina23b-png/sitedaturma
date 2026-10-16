@@ -1255,14 +1255,13 @@ const Remote = {
     await waitFirebase();
     const u = String(usuario || '').trim().toLowerCase();
     if (!u) throw new ApiError('Informe o usuário.');
-    if (u === 'presidente') {
-      if (String(senha || '') !== SENHA_PRESIDENTE) throw new ApiError('Senha incorreta.');
-    } else {
-      const existe = await FB().getDoc(docRef('usuarios', u));
-      if (!existe.exists()) throw new ApiError('Usuário não encontrado.');
-    }
+    if (u === 'presidente' && String(senha || '') !== SENHA_PRESIDENTE) throw new ApiError('Senha incorreta.');
     const email = u + '@turma23b.local';
     const senhaReal = u === 'presidente' ? SENHA_PRESIDENTE : (SENHA_TECNICA_DISCENTE + u);
+    // Autentica (ou cria a conta, se for a primeira vez) ANTES de olhar o
+    // Firestore — as regras só liberam leitura pra quem já está autenticado,
+    // então checar "o usuário existe?" antes da autenticação sempre seria
+    // negado, mesmo pro usuário certo.
     let cred;
     try {
       cred = await FB().signInWithEmailAndPassword(FB().auth, email, senhaReal);
@@ -1280,8 +1279,15 @@ const Remote = {
     const role = u === 'presidente' ? 'presidente' : 'user';
     let nomeReal = '';
     if (role !== 'presidente') {
+      // Agora já autenticado como esse próprio usuário — a regra "dono()"
+      // libera ler o próprio documento. Se não existir, essa pessoa não é
+      // discente de verdade: desfaz a sessão e recusa.
       const snap = await FB().getDoc(docRef('usuarios', u));
-      nomeReal = snap.exists() ? (snap.data().nome || '') : '';
+      if (!snap.exists()) {
+        await FB().signOut(FB().auth);
+        throw new ApiError('Usuário não encontrado.');
+      }
+      nomeReal = snap.data().nome || '';
     }
     return { role, usuario: u, nomeReal, token: 'firebase' };
   },
