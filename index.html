@@ -1348,7 +1348,7 @@ const Remote = {
       }
       await Promise.all(tarefas);
       return out;
-    } catch (err) { throw toApiError(err); }
+    } catch (err) { console.error('Remote.sync falhou:', err && err.code, err && err.message, err); throw toApiError(err); }
   },
 
   async saveEvent(token, ev) {
