@@ -1,0 +1,12 @@
+{
+  "name": "push-23b",
+  "private": true,
+  "description": "Worker da Cloudflare: push em tempo real e lembretes (push + e-mail) 2h antes dos eventos — Medicina 23B",
+  "scripts": {
+    "deploy": "wrangler deploy",
+    "logs": "wrangler tail"
+  },
+  "devDependencies": {
+    "wrangler": "^3.80.0"
+  }
+}

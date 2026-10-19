@@ -144,5 +144,22 @@ service cloud.firestore {
     match /lembretesEnviados/{usuario}/itens/{id} {
       allow read, write: if dono(usuario);
     }
+
+    // ---------------- Push (aparelhos que recebem notificação com o app fechado) ----------------
+    // Id = sha256 do token do aparelho (só o próprio aparelho conhece o token).
+    // Cada pessoa grava/atualiza só o registro com o PRÓPRIO usuário; se outra
+    // pessoa entrar no mesmo celular, o registro passa pra ela. Ninguém lê pelo
+    // app — quem lê é o Worker da Cloudflare (push-worker/), com conta de serviço.
+    match /pushTokens/{id} {
+      allow read: if false;
+      allow create, update: if signedIn() && request.resource.data.usuario == meu()
+                            && request.resource.data.token is string && request.resource.data.token.size() < 4096;
+      allow delete: if signedIn() && resource.data.usuario == meu();
+    }
+
+    // ---------------- Lembretes de 2h antes já enviados (controle do Worker) ----------------
+    match /lembretes2h/{id} {
+      allow read, write: if false;
+    }
   }
 }

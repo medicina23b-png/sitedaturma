@@ -87,9 +87,16 @@ Repita isso sempre que esse arquivo mudar (por exemplo, numa atualização futur
 
 ---
 
-## 4. E-mails de aviso (não disponível nesta versão)
+## 4. Notificações no celular e e-mail 2h antes (Worker da Cloudflare)
 
-Sem Cloud Functions, o site não manda e-mail — os avisos (mural, evento alterado) aparecem só como notificação dentro do próprio site/app (sininho + notificação do sistema, se a pessoa tiver instalado o PWA). Isso é suficiente pro uso do dia a dia; se um dia quiser e-mail também, é possível adicionar depois.
+Continua sem Cloud Functions e sem Blaze: quem manda o push (com o app fechado) e os e-mails de lembrete é um Worker grátis da Cloudflare, na pasta [`push-worker/`](push-worker/README.md). Siga o passo a passo de lá (conta de serviço do Firebase + Brevo para e-mail + `npx wrangler deploy`).
+
+O que ele faz:
+
+- **Tempo real**: quando o presidente publica no mural, cria/edita/cancela/remove um evento, publica um arquivo ou uma data importante, todo mundo que precisa saber recebe a notificação no celular na hora.
+- **2h antes de cada evento**: quem está na lista do evento recebe push + e-mail com os dados (disciplina, data, horário, local, docente, grupo, roteiros, observações).
+
+Depois de publicar as regras novas do Firestore (passo 3 — elas agora liberam a coleção `pushTokens`, que guarda os aparelhos), cada pessoa só precisa tocar em **Ativar** no aviso que aparece no topo do app (ou no sininho ▸ "Ativar notificações"). No iPhone, isso só funciona com o app instalado na Tela de Início (exigência da Apple, iOS 16.4+).
 
 ---
 
@@ -207,13 +214,21 @@ Pra confirmar qual é: Console do Firebase → **Functions** → clique na funç
 
 ---
 
+## Aplicativo (PWA) — Medicina 23B
+
+- **Ícone novo**: "Medicina 23B" com o cajado de Asclépio, fundo branco — no ícone do app, no favicon da aba e na marca do topo. Versão "maskable" para o Android recortar em círculo sem cortar o desenho.
+- **Já abre logado**: o login fica guardado no aparelho e, se a sessão do Firebase sumir, o app entra de novo sozinho. Ao instalar, o endereço guardado já identifica a pessoa — no iPhone, onde o app instalado não enxerga o login feito no Safari, ele abre direto logado. (O presidente continua tendo que digitar a senha no app instalado do iPhone, por segurança.)
+- **Atualiza sozinho**: o service worker busca a versão nova do site sempre que o app volta para a tela.
+- **Navegação mais fluida**: troca de aba deslizando para o lado certo, barrinha da aba ativa que acompanha, deslizar o dedo para trocar de aba (ou de semana/mês no Cronograma), janelas que sobem de baixo no celular e fecham arrastando pra baixo, avisos animados. Quem ativou "reduzir movimento" no sistema vê tudo sem animação.
+
 ## Estrutura do projeto
 
 ```
-index.html, manifest.json, sw.js, ícones → o site em si, na raiz, publicado pelo Cloudflare Pages
+index.html, manifest.json, sw.js, ícones → o site em si, na raiz
+push-worker/        → Worker da Cloudflare: push em tempo real + lembrete 2h antes (push e e-mail)
 scripts/migrate.js  → script de migração + criação dos logins (roda uma única vez)
 scripts/data/dados-turma.xlsx → dados reais da turma pra migração — NUNCA commitar (já no .gitignore)
-scripts/make_favicon.py → script que gerou os ícones/favicon (não precisa rodar de novo)
+scripts/make_icons.js → gera os ícones/favicon (cajado de Asclépio); scripts/make_favicon.py era o gerador antigo
 firestore.rules     → regras de segurança do banco de dados (toda a lógica de autorização, sem Cloud Functions)
 firebase.json, .firebaserc, firestore.indexes.json → configuração do Firebase
 ```

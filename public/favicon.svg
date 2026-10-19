@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100" width="100" height="100">
+  <rect width="100" height="100" rx="22" fill="#ffffff"/>
+  <rect x="0.75" y="0.75" width="98.5" height="98.5" rx="21.5" fill="none" stroke="#d6dae2" stroke-width="1.5"/>
+  <g transform="translate(50 50) scale(0.52) translate(-50 -82)">
+    <rect x="43" y="8" width="14" height="150" rx="7" fill="#16181d"/>
+    <circle cx="50" cy="9" r="10.08" fill="#16181d"/>
+    <path d="M 50 146 C 22 140, 22 118, 50 112 C 78 106, 78 84, 50 78 C 22 72, 22 50, 50 44 C 72 40, 82 34, 76 26" fill="none" stroke="#ffffff" stroke-width="22" stroke-linecap="round"/>
+    <path d="M 50 146 C 22 140, 22 118, 50 112 C 78 106, 78 84, 50 78 C 22 72, 22 50, 50 44 C 72 40, 82 34, 76 26" fill="none" stroke="#2547d0" stroke-width="12" stroke-linecap="round"/>
+    <!-- trecho do bastão "por cima" da serpente: dá a ideia de ela estar enrolada -->
+    <rect x="38" y="70" width="24" height="16" fill="#ffffff"/>
+    <rect x="43" y="68" width="14" height="20" fill="#16181d"/>
+    <!-- cabeça -->
+    <ellipse cx="75" cy="22" rx="10" ry="7" transform="rotate(-50 75 22)" fill="#2547d0" stroke="#ffffff" stroke-width="3"/>
+    </g>
+</svg>
