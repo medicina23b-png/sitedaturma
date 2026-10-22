@@ -2,23 +2,20 @@
 <html lang="pt-BR">
 <head>
 <meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>Medicina 23B — Cronograma acadêmico</title>
-<meta name="description" content="Cronograma, mural, arquivos e notas da Turma 23B de Medicina.">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cronograma acadêmico</title>
 
 <!-- ---------- "instalar como app" (ícone na tela de início, sem barra do
      navegador). iOS: usa as tags apple-*. Android/Chrome: usa o manifest.json. ---------- -->
-<meta name="theme-color" content="#ffffff" id="meta-theme">
+<meta name="theme-color" content="#16181d">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-status-bar-style" content="default">
-<meta name="apple-mobile-web-app-title" content="Medicina 23B">
-<meta name="application-name" content="Medicina 23B">
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
-<link rel="icon" type="image/png" sizes="32x32" href="icon-32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="icon-16.png">
-<link rel="alternate icon" type="image/x-icon" href="favicon.ico">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="Cronograma">
+<link rel="icon" type="image/x-icon" href="favicon.ico">
+<link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+<link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+<link rel="apple-touch-icon" href="apple-touch-icon.png">
 <link rel="manifest" href="manifest.json">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -33,50 +30,40 @@
      imports funcionarem) e expõe tudo em window.Firebase, que o script
      principal mais abaixo usa (ver objeto "Remote"). ===================== -->
 <script type="module">
-  import { initializeApp } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-app.js";
-  import { getAnalytics, isSupported as analyticsIsSupported } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-analytics.js";
-  import {
-    initializeAuth, indexedDBLocalPersistence, browserLocalPersistence,
-    signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut,
-  } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-auth.js";
+  import { initializeApp } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-app.js";
+  import { getAnalytics, isSupported as analyticsIsSupported } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-analytics.js";
   import {
     getFirestore, collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc,
     updateDoc, deleteDoc, query, where, orderBy, limit, onSnapshot, writeBatch,
-  } from "https://www.gstatic.com/firebasejs/10.14.1/firebase-firestore.js";
+  } from "https://www.gstatic.com/firebasejs/13.0.0/firebase-firestore.js";
   // Sem Firebase Storage neste projeto (por escolha) — "Arquivos da Turma"
   // funciona só por link (Google Drive, Docs etc.), então não precisa do
   // SDK de Storage nem do produto Storage ativado no Console.
   // Sem Cloud Functions neste projeto (por escolha, pra não exigir o plano
-  // Blaze/cartão de crédito) — login usa Firebase Authentication direto, e
-  // toda a lógica de negócio roda no próprio navegador + regras do Firestore.
+  // Blaze/cartão de crédito) e SEM Firebase Authentication (por escolha do
+  // presidente) — toda a lógica de negócio roda no próprio navegador, e o
+  // Firestore fica com leitura/escrita abertas (ver firestore.rules).
 
   // Config pública do projeto "turma23b" — não é segredo: a segurança do
   // Firebase vem das regras do Firestore e da validação nas Cloud
   // Functions, não de esconder esta configuração (ela viaja pro navegador
   // de qualquer jeito, em qualquer app Firebase).
   const firebaseConfig = {
-    apiKey: "AIzaSyAdvBFxOKEFlhYHrdDhCkE1V1PJyAc0U64",
-    authDomain: "cronograma-23b.firebaseapp.com",
-    projectId: "cronograma-23b",
-    storageBucket: "cronograma-23b.firebasestorage.app",
-    messagingSenderId: "918600139865",
-    appId: "1:918600139865:web:48741541fec570cec11d48",
-    measurementId: "G-GLNTR74DV4",
+    apiKey: "AIzaSyBWq1IDLGAup_Id4exm5ivLyKgUhPJV_6k",
+    authDomain: "turma23b.firebaseapp.com",
+    projectId: "turma23b",
+    storageBucket: "turma23b.firebasestorage.app",
+    messagingSenderId: "701570035640",
+    appId: "1:701570035640:web:21a2527d746ed2ece0694d",
+    measurementId: "G-0G1T3DP159",
   };
 
   const app = initializeApp(firebaseConfig);
-  // Sessão guardada no próprio aparelho (IndexedDB, com localStorage de
-  // reserva) — é isso que mantém cada pessoa logada ao reabrir o app/PWA.
-  const auth = initializeAuth(app, { persistence: [indexedDBLocalPersistence, browserLocalPersistence] });
   const db = getFirestore(app);
   analyticsIsSupported().then(ok => { if (ok) getAnalytics(app); }).catch(() => {});
-  // Resolve assim que o Firebase terminar de restaurar a sessão salva (com
-  // ou sem usuário) — antes disso, qualquer leitura sairia "sem login".
-  const authReady = new Promise(res => { const off = onAuthStateChanged(auth, u => { off(); res(u); }); });
 
   window.Firebase = {
-    app, auth, db, authReady,
-    signInWithEmailAndPassword, createUserWithEmailAndPassword, onAuthStateChanged, signOut,
+    app, db,
     collection, collectionGroup, doc, getDoc, getDocs, setDoc, addDoc, updateDoc, deleteDoc,
     query, where, orderBy, limit, onSnapshot, writeBatch,
   };
@@ -208,8 +195,7 @@ h1,h2,h3,h4,p{margin:0}
 .login-card{width:100%;max-width:392px}
 .login h1{font-size:26px;font-weight:600;letter-spacing:-.02em;margin:26px 0 4px}
 .brand{display:flex;align-items:center;gap:10px;font-weight:600;letter-spacing:-.01em}
-.brand-mark{width:30px;height:30px;border-radius:8px;background:#fff;display:grid;place-items:center;overflow:hidden;flex:none}
-.brand-mark img{width:100%;height:100%;display:block}
+.brand-mark{width:30px;height:30px;border-radius:8px;background:var(--ink-solid);color:#fff;display:grid;place-items:center}
 .demo-note{margin-top:22px;padding:12px 14px;border-radius:8px;background:var(--soft);font-size:12.5px;color:var(--ink-2)}
 .demo-note code{font-family:inherit;font-weight:600;color:var(--ink)}
 
@@ -612,78 +598,7 @@ a.mural-cita{text-decoration:none}
 @keyframes fade{from{opacity:0}to{opacity:1}}
 @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 @keyframes pulse{50%{opacity:.35}}
-
-/* ---------- navegação fluida e animações ---------- */
-html{-webkit-tap-highlight-color:transparent}
-body{overscroll-behavior-x:none}
-:root{--ease:cubic-bezier(.2,.8,.2,1);--ease-out:cubic-bezier(.16,1,.3,1)}
-/* troca de aba: o conteúdo entra deslizando do lado certo */
-@keyframes slideInR{from{opacity:0;transform:translateX(28px)}to{opacity:1;transform:none}}
-@keyframes slideInL{from{opacity:0;transform:translateX(-28px)}to{opacity:1;transform:none}}
-@keyframes slideOutL{to{opacity:0;transform:translateX(-28px)}}
-@keyframes slideOutR{to{opacity:0;transform:translateX(28px)}}
-@keyframes fadeUp{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
-.page.anim-r{animation:slideInR .32s var(--ease-out) both}
-.page.anim-l{animation:slideInL .32s var(--ease-out) both}
-.page.anim-up{animation:fadeUp .3s var(--ease-out) both}
-/* View Transitions (Chrome/Edge/Safari 18+): só a área de conteúdo anima, o topo fica parado */
-#view{view-transition-name:pagina}
-::view-transition-old(pagina){animation:.18s ease-in both slideOutL}
-::view-transition-new(pagina){animation:.32s var(--ease-out) both slideInR}
-html.vt-back::view-transition-old(pagina){animation-name:slideOutR}
-html.vt-back::view-transition-new(pagina){animation-name:slideInL}
-html.vt-fade::view-transition-old(pagina){animation:.15s ease-in both fade reverse}
-html.vt-fade::view-transition-new(pagina){animation:.28s var(--ease-out) both fadeUp}
-/* itens da tela entram em cascata */
-.page.cascata > *{animation:fadeUp .38s var(--ease-out) both}
-.page.cascata > *:nth-child(2){animation-delay:.03s}
-.page.cascata > *:nth-child(3){animation-delay:.06s}
-.page.cascata > *:nth-child(4){animation-delay:.09s}
-.page.cascata > *:nth-child(5){animation-delay:.12s}
-.page.cascata > *:nth-child(n+6){animation-delay:.15s}
-/* indicador da aba ativa desliza até a aba clicada */
-.tabs{position:relative;scroll-behavior:smooth;scrollbar-width:none;min-width:0;flex:0 1 auto;overflow-x:auto;overflow-y:hidden}
-.tabs::-webkit-scrollbar{display:none}
-.topbar .brand{white-space:nowrap;flex:none}
-.tab{transition:color .2s;white-space:nowrap;flex:none}
-.tab.is-active::after{display:none}
-.tab-ink{position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--accent);border-radius:2px;transition:transform .35s var(--ease-out),width .35s var(--ease-out);pointer-events:none}
-.tabs:not(.ink-ready) .tab.is-active::after{display:block}
-/* toque: resposta imediata */
-.btn,.icon-btn,.tab,.ev,.notif-item,.seg button{transition:background .15s,border-color .15s,color .15s,box-shadow .15s,transform .12s var(--ease)}
-.btn:active:not([disabled]),.icon-btn:active,.ev:active,.notif-item:active,.seg button:active{transform:scale(.97)}
-.ev:hover{transform:translateY(-1px)}
-/* modais: abrem e fecham suaves */
-.overlay{transition:background .2s}
-.overlay.is-closing{animation:fade .18s ease-in reverse both}
-.overlay.is-closing .modal{animation:rise .18s ease-in reverse both}
-.modal{animation:rise .26s var(--ease-out)}
-/* toasts entram e saem */
-.toast{animation:toastIn .32s var(--ease-out) both}
-.toast.is-leaving{animation:toastOut .25s ease-in both}
-@keyframes toastIn{from{opacity:0;transform:translateY(14px) scale(.96)}to{opacity:1;transform:none}}
-@keyframes toastOut{to{opacity:0;transform:translateY(10px) scale(.96)}}
-.toast-notif{pointer-events:auto;display:flex;gap:10px;align-items:flex-start;text-align:left;border:0;border-radius:14px;max-width:min(420px,calc(100vw - 32px));padding:12px 16px;cursor:pointer;font:inherit;color:#fff}
-.toast-notif .ic{flex:none;margin-top:2px}
-.toast-notif small{opacity:.8}
-/* tela de abertura (enquanto o app descobre quem está logado) */
-.splash{min-height:100vh;min-height:100dvh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:22px;background:var(--bg)}
-.splash img{border-radius:22px;box-shadow:0 10px 40px rgba(22,24,29,.12);animation:fadeUp .5s var(--ease-out) both}
-.splash-bar{width:120px;height:3px;border-radius:3px;background:var(--line);overflow:hidden}
-.splash-bar i{display:block;width:40%;height:100%;background:var(--accent);border-radius:3px;animation:splashBar 1.1s ease-in-out infinite}
-@keyframes splashBar{from{transform:translateX(-100%)}to{transform:translateX(250%)}}
-/* convite para ativar as notificações */
-.push-banner{max-width:1360px;margin:14px auto 0;padding:0 24px}
-.push-banner-in{display:flex;align-items:center;gap:12px;padding:12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--accent-soft);animation:fadeUp .4s var(--ease-out) both}
-.push-banner-in .ic{color:var(--accent);flex:none}
-.push-banner-in p{margin:0;flex:1;font-size:13px;line-height:1.4}
-.push-banner.is-leaving .push-banner-in{animation:fadeUp .25s ease-in reverse both}
-/* app instalado: respeita o recorte da tela (notch) */
-@supports (padding:max(0px)){
-  .topbar-in{padding-left:max(24px,env(safe-area-inset-left));padding-right:max(24px,env(safe-area-inset-right))}
-  .toast-root{bottom:max(24px,calc(env(safe-area-inset-bottom) + 12px))}
-}
-@media (prefers-reduced-motion:reduce){*,::view-transition-group(*),::view-transition-old(*),::view-transition-new(*){animation:none!important;transition:none!important}}
+@media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
 /* ---------- responsivo ---------- */
 @media (max-width:900px){
@@ -706,19 +621,7 @@ html.vt-fade::view-transition-new(pagina){animation:.28s var(--ease-out) both fa
   .row.c2,.row.c3,.facts{grid-template-columns:1fr}
   .modal{padding:20px}
   .toolbar .spacer{display:none}
-  /* celular: modal vira uma "folha" que sobe de baixo (arraste pra baixo pra fechar) */
-  .overlay{padding:10vh 0 0;align-items:flex-start}
-  .modal:not(.coord){margin-top:auto;border-radius:20px 20px 0 0;padding-bottom:max(20px,calc(env(safe-area-inset-bottom) + 16px));animation:sheetUp .34s var(--ease-out) both;position:relative}
-  .modal:not(.coord)::before{content:'';position:absolute;top:8px;left:50%;width:38px;height:4px;margin-left:-19px;border-radius:4px;background:var(--line-2)}
-  .overlay.is-closing .modal:not(.coord){animation:sheetDown .22s ease-in both}
-  .modal.is-dragging{transition:none!important;animation:none!important}
-  .push-banner{padding:0 16px}
-  .topbar-in{column-gap:6px}
-  .topbar .brand{font-size:14px;margin-right:auto}
-  .topbar .icon-btn{width:32px;height:32px}
 }
-@keyframes sheetUp{from{transform:translateY(100%)}to{transform:none}}
-@keyframes sheetDown{to{transform:translateY(100%)}}
 
 /* ---------- impressão ---------- */
 .print-head{display:none}
@@ -779,15 +682,6 @@ const CONFIG = {
   // do link.
   ICS_URL: '',
 
-  // Chave pública VAPID do Firebase Cloud Messaging (push com o app fechado).
-  // Console Firebase ▸ Configurações do projeto ▸ Cloud Messaging ▸ "Certificados
-  // push da Web" ▸ Gerar par de chaves ▸ copie a "Chave do par de chaves" aqui.
-  // Enquanto ficar vazia, o app só avisa com ele aberto (como antes).
-  VAPID_KEY: 'BBEisGj2rkOewDt9W49n1GVu52rydm5XXIABOcRkrYN3PL2lKWCr60l3xw2iQ1kxbSZoK1F1DHJFssuVJKYS3fc',
-
-  // Endereço do Worker da Cloudflare que envia os pushes (pasta push-worker/).
-  // Aparece no terminal depois do "wrangler deploy", ex.: https://push-23b.SEU-USUARIO.workers.dev
-     PUSH_URL: 'https://push-23b.medicina23b.workers.dev',
   // De quanto em quanto tempo o site confere se há novidades (ms). As
   // notificações (sino no topo) chegam na hora, por assinatura em tempo
   // real (onSnapshot); o resto dos dados (cronograma, mural etc.) usa esse
@@ -1121,9 +1015,6 @@ function temaEfetivo() {
 }
 function aplicarTema() {
   document.documentElement.setAttribute('data-theme', temaEfetivo());
-  // cor da barra de status do celular / barra de título do app instalado
-  const meta = document.getElementById('meta-theme');
-  if (meta) meta.setAttribute('content', temaEfetivo() === 'dark' ? '#14161b' : '#ffffff');
   const btn = document.getElementById('theme-btn');
   if (btn) btn.innerHTML = icon(temaEfetivo() === 'dark' ? 'sun' : 'moon', 16);
 }
@@ -1217,7 +1108,6 @@ const FB = () => window.Firebase;
 // no mesmo ApiError que o resto do site já sabe tratar — handleApiError()
 // desloga sozinho quando o code é 'AUTH', exatamente como antes.
 function toApiError(err) {
-  try { console.error('[Firebase erro real]', err && err.code, err && err.message); } catch (_) {}
   const code = String((err && err.code) || '');
   const auth = code.indexOf('permission-denied') >= 0 || code.indexOf('unauthenticated') >= 0 || code === 'permission-denied';
   const msg = (err && err.message) ? String(err.message).replace(/^Firebase:\s*/, '').replace(/\s*\(\w[\w-]*\/[\w-]+\)\.?$/, '') : 'Erro no servidor.';
@@ -1244,33 +1134,16 @@ async function pegarOnde(nomeColecao, campo, valor) {
    Sem Cloud Functions: é o próprio navegador do presidente que calcula quem
    precisa ser avisado e grava em notificacoes/{usuario}/itens — autorizado
    pela regra "allow create: if presidente() || dono(usuario)". */
-// Pede ao servidor (Cloudflare) pra enviar já o push das notificações recém-criadas.
-// Se falhar, a função agendada pega no próximo ciclo (até ~5 min depois).
-async function dispararPush() {
-  try {
-    const u = FB().auth.currentUser; if (!u || !CONFIG.VAPID_KEY || !CONFIG.PUSH_URL) return;
-    await fetch(CONFIG.PUSH_URL, { method: 'POST', headers: { Authorization: 'Bearer ' + await u.getIdToken() } });
-  } catch (err) { /* sem problema: o agendador cobre */ }
-}
-// "seg., 20/10 · 08:00–10:00 · Tutoria C1 / UEPA" — vai junto no texto das notificações de evento.
-function resumoEvento(e) {
-  if (!e) return '';
-  const d = e.data ? parseISO(e.data) : null;
-  const dia = d ? WD_SHORT[(d.getDay() + 6) % 7].toLowerCase() + '., ' + pad(d.getDate()) + '/' + pad(d.getMonth() + 1) : '';
-  const hora = e.inicio ? e.inicio + (e.fim ? '–' + e.fim : '') : '';
-  return [dia, hora, e.local].filter(Boolean).join(' · ');
-}
 async function notificarUsuario(usuario, tipo, titulo, corpo, refId) {
   try {
     await FB().addDoc(FB().collection(FB().db, 'notificacoes', usuario, 'itens'), {
-      tipo, titulo, corpo, refId: refId || '', lida: false, pushEnviado: false, criadoEm: new Date().toISOString(),
+      tipo, titulo, corpo, refId: refId || '', lida: false, criadoEm: new Date().toISOString(),
     });
   } catch (err) { /* nunca trava a ação principal por causa de notificação */ }
 }
 async function notificarTodosDiscentes(tipo, titulo, corpo, refId) {
   const usuarios = await pegarTodos('usuarios');
   await Promise.all(usuarios.filter(u => u.id !== 'presidente').map(u => notificarUsuario(u.id, tipo, titulo, corpo, refId)));
-  dispararPush();
 }
 // Mesma lógica de "estouNesseEvento" (mais abaixo no arquivo), só que
 // checando TODOS os discentes de uma vez, não só quem está logado agora.
@@ -1293,7 +1166,6 @@ async function notificarEventoAlterado(evento, titulo, corpo) {
   ]);
   const publico = Array.from(new Set([...seguidores, ...citados]));
   await Promise.all(publico.map(u => notificarUsuario(u, 'evento', titulo, corpo, evento.id)));
-  dispararPush();
 }
 // Hash SHA-256 (Web Crypto, nativo do navegador) — usado pra conferir a
 // segunda senha da aba Notas sem nunca mandar a senha de ninguém pro
@@ -1367,11 +1239,12 @@ async function montarMural(usuarioAtual) {
   }).sort((a, b) => (b.criadoEm || '').localeCompare(a.criadoEm || ''));
 }
 
-// Senha "técnica" usada para os discentes entrarem — ninguém digita ela (o
-// site não pede senha pro aluno, só o usuário). O presidente tem senha de
-// verdade, fixa. Nenhuma conta precisa ser criada à mão no Firebase Console:
-// na primeira vez que cada pessoa entra, o próprio site cria a conta dela.
-const SENHA_TECNICA_DISCENTE = 'turma23b-sessao-2026-sem-senha-';
+// Senha do presidente — fixa. O discente não tem senha nenhuma (só digita o
+// usuário). SEM Firebase Authentication neste projeto (por escolha do
+// presidente): o Firestore fica com leitura/escrita abertas (ver
+// firestore.rules) e quem está "logado" é controlado só pelo navegador de
+// cada um (guardado em localStorage) — não existe mais nenhuma verificação
+// do lado do servidor de quem é quem.
 const SENHA_PRESIDENTE = '23b23b';
 
 const Remote = {
@@ -1380,47 +1253,14 @@ const Remote = {
     const u = String(usuario || '').trim().toLowerCase();
     if (!u) throw new ApiError('Informe o usuário.');
     if (u === 'presidente' && String(senha || '') !== SENHA_PRESIDENTE) throw new ApiError('Senha incorreta.');
-    const email = u + '@turma23b.local';
-    const senhaReal = u === 'presidente' ? SENHA_PRESIDENTE : (SENHA_TECNICA_DISCENTE + u);
-    // Autentica (ou cria a conta, se for a primeira vez) ANTES de olhar o
-    // Firestore — as regras só liberam leitura pra quem já está autenticado,
-    // então checar "o usuário existe?" antes da autenticação sempre seria
-    // negado, mesmo pro usuário certo.
-    let cred;
-    try {
-      cred = await FB().signInWithEmailAndPassword(FB().auth, email, senhaReal);
-    } catch (err) {
-      const code = String((err && err.code) || '');
-      // Versões recentes do Firebase Auth não dizem mais separadamente
-      // "não existe" vs "senha errada" (por segurança, pra ninguém descobrir
-      // por tentativa quais usuários existem) — tudo vira um erro genérico
-      // ("invalid-credential"/"invalid-login-credentials"). Como a senha que
-      // a gente manda já é sempre a certa (é gerada aqui mesmo), um erro
-      // aqui só pode mesmo ser "essa conta ainda não existe" — então cria.
-      const podeSerPrimeiraVez = code.indexOf('user-not-found') >= 0 || code.indexOf('invalid-credential') >= 0 || code.indexOf('invalid-login-credentials') >= 0;
-      if (podeSerPrimeiraVez) {
-        // Primeira vez dessa pessoa — cria a conta sozinho, sem precisar de
-        // ninguém clicar em nada no Firebase Console.
-        try { cred = await FB().createUserWithEmailAndPassword(FB().auth, email, senhaReal); }
-        catch (err2) { throw toApiError(err2); }
-      } else {
-        throw toApiError(err);
-      }
-    }
     const role = u === 'presidente' ? 'presidente' : 'user';
     let nomeReal = '';
     if (role !== 'presidente') {
-      // Agora já autenticado como esse próprio usuário — a regra "dono()"
-      // libera ler o próprio documento. Se não existir, essa pessoa não é
-      // discente de verdade: desfaz a sessão e recusa.
       const snap = await FB().getDoc(docRef('usuarios', u));
-      if (!snap.exists()) {
-        await FB().signOut(FB().auth);
-        throw new ApiError('Usuário não encontrado.');
-      }
+      if (!snap.exists()) throw new ApiError('Usuário não encontrado.');
       nomeReal = snap.data().nome || '';
     }
-    return { role, usuario: u, nomeReal, token: 'firebase' };
+    return { role, usuario: u, nomeReal, token: 'local' };
   },
 
   async sync(usuario, v, va, vm, vd, vav, vdi, vc) {
@@ -1436,17 +1276,25 @@ const Remote = {
         serverTime: new Date().toISOString(), appUrl: '',
       };
 
+      // Cada tarefa é rotulada com o nome da coleção, pra se alguma falhar
+      // (ex.: permission-denied) o Console mostrar exatamente qual foi —
+      // em vez de um erro genérico que não diz onde a regra bloqueou.
+      const marcar = (rotulo, promessa) => promessa.catch(err => {
+        console.error('[sync:' + rotulo + ']', (err && err.code) || '', (err && err.message) || err);
+        throw err;
+      });
+
       const tarefas = [
-        pegarTodos('eventos').then(r => { out.events = r; }),
-        pegarTodos('arquivos').then(r => { out.arquivos = r.map(enriquecerArquivoFs); }),
-        montarMural(usuario).then(r => { out.mural = r; }),
-        pegarTodos('datasImportantes').then(r => { out.datas = r.sort((a, b) => a.data.localeCompare(b.data)); }),
-        pegarTodos('config').then(r => { const cfg = {}; r.forEach(c => { cfg[c.id] = c.valor; }); out.config = cfg; }),
+        marcar('eventos', pegarTodos('eventos')).then(r => { out.events = r; }),
+        marcar('arquivos', pegarTodos('arquivos')).then(r => { out.arquivos = r.map(enriquecerArquivoFs); }),
+        marcar('mural', montarMural(usuario)).then(r => { out.mural = r; }),
+        marcar('datasImportantes', pegarTodos('datasImportantes')).then(r => { out.datas = r.sort((a, b) => a.data.localeCompare(b.data)); }),
+        marcar('config', pegarTodos('config')).then(r => { const cfg = {}; r.forEach(c => { cfg[c.id] = c.valor; }); out.config = cfg; }),
       ];
       if (usuario) {
-        tarefas.push(pegarOnde('acompanhados', 'usuario', String(usuario).toLowerCase()).then(r => { out.followed = r.map(x => x.eventoId); }));
-        tarefas.push(pegarOnde('notas', 'usuario', String(usuario).toLowerCase()).then(r => { out.notas = r; }));
-        tarefas.push(FB().getDoc(docRef('usuarios', String(usuario).toLowerCase())).then(s => { out.nomeReal = s.exists() ? (s.data().nome || '') : ''; }));
+        tarefas.push(marcar('acompanhados', pegarOnde('acompanhados', 'usuario', String(usuario).toLowerCase())).then(r => { out.followed = r.map(x => x.eventoId); }));
+        tarefas.push(marcar('notas', pegarOnde('notas', 'usuario', String(usuario).toLowerCase())).then(r => { out.notas = r; }));
+        tarefas.push(marcar('usuarios/' + usuario, FB().getDoc(docRef('usuarios', String(usuario).toLowerCase()))).then(s => { out.nomeReal = s.exists() ? (s.data().nome || '') : ''; }));
       } else { out.followed = []; out.notas = []; out.nomeReal = ''; }
 
       const souPresidente = String(usuario || '').trim().toLowerCase() === 'presidente';
@@ -1458,21 +1306,21 @@ const Remote = {
         // — coleção que qualquer usuário logado já pode ler.
         out.versionAvaliacoes = agora;
         out.versionDiscentes = agora;
-        tarefas.push(pegarTodos('avaliacoes').then(r => { out.avaliacoes = r; }));
-        tarefas.push(pegarTodos('usuarios').then(r => {
+        tarefas.push(marcar('avaliacoes', pegarTodos('avaliacoes')).then(r => { out.avaliacoes = r; }));
+        tarefas.push(marcar('usuarios(todos)', pegarTodos('usuarios')).then(r => {
           out.discentes = r.filter(u => u.id !== 'presidente').map(u => ({ usuario: u.id, nome: u.nome || '', email: u.email || '', matricula: u.matricula || '', telefone: u.telefone || '', temSenhaNotas: !!u.senhaNotasHash }));
           const lista = r.filter(u => /^\d{2}-\d{2}$/.test(u.aniversario || '')).map(u => ({ usuario: u.id, nome: u.nome || '', aniversario: u.aniversario }));
           out.aniversariantes = lista;
           FB().setDoc(docRef('config', 'aniversariantes'), { lista }, { merge: true }).catch(() => { /* não crítico */ });
         }));
       } else {
-        tarefas.push(FB().getDoc(docRef('config', 'aniversariantes')).then(s => {
+        tarefas.push(marcar('config/aniversariantes', FB().getDoc(docRef('config', 'aniversariantes'))).then(s => {
           out.aniversariantes = (s.exists() && Array.isArray(s.data().lista)) ? s.data().lista : [];
         }).catch(() => { out.aniversariantes = []; }));
       }
       await Promise.all(tarefas);
       return out;
-    } catch (err) { throw toApiError(err); }
+    } catch (err) { console.error('Remote.sync falhou:', err && err.code, err && err.message, err); throw toApiError(err); }
   },
 
   async saveEvent(token, ev) {
@@ -1494,20 +1342,15 @@ const Remote = {
         if (antes.data !== dados.data || antes.inicio !== dados.inicio || antes.fim !== dados.fim) partes.push('horário');
         if ((antes.local || '') !== (dados.local || '')) partes.push('sala/local');
         if ((antes.docente || '') !== (dados.docente || '')) partes.push('professor');
-        if ((antes.grupo || '') !== (dados.grupo || '') || (antes.discentes || '') !== (dados.discentes || '')) partes.push('grupo/discentes');
-        if ((antes.titulo || '') !== (dados.titulo || '')) partes.push('título');
-        if ((antes.roteiros || '') !== (dados.roteiros || '') || (antes.observacoes || '') !== (dados.observacoes || '')) partes.push('roteiro/observações');
         const cancelouAgora = (antes.cancelado || '') !== 'Sim' && dados.cancelado === 'Sim';
         const reabriuAgora = (antes.cancelado || '') === 'Sim' && dados.cancelado !== 'Sim';
         if (cancelouAgora) partes.push('cancelamento');
         if (reabriuAgora) partes.push('reabertura');
         if (partes.length) {
           const titulo = cancelouAgora ? 'Evento cancelado' : 'Evento alterado';
-          const corpo = (dados.titulo || 'Um evento') + ' — mudou: ' + partes.join(', ') + '. ' + resumoEvento(dados);
+          const corpo = (dados.titulo || 'Um evento') + ' — mudou: ' + partes.join(', ') + '.';
           notificarEventoAlterado({ id, ...dados }, titulo, corpo); // não espera — não trava a resposta
         }
-      } else if (eraNovo) {
-        notificarEventoAlterado({ id, ...dados }, 'Novo evento com você', (dados.titulo || 'Evento') + ' — ' + resumoEvento(dados));
       }
       return { event: e, version: String(Date.now()) };
     } catch (err) { throw toApiError(err); }
@@ -1516,12 +1359,7 @@ const Remote = {
   async deleteEvent(token, id) {
     try {
       await waitFirebase();
-      const antesSnap = await FB().getDoc(docRef('eventos', id));
       await FB().deleteDoc(docRef('eventos', id));
-      if (antesSnap.exists()) {
-        const a = antesSnap.data();
-        await notificarEventoAlterado({ id, ...a }, 'Evento removido', (a.titulo || 'Um evento') + ' foi removido do cronograma. ' + resumoEvento(a)).catch(() => {});
-      }
       const seguidores = await pegarOnde('acompanhados', 'eventoId', id);
       if (seguidores.length) {
         const batch = FB().writeBatch(FB().db);
@@ -1562,7 +1400,6 @@ const Remote = {
         a.ordem = String(Date.now());
       }
       await FB().setDoc(docRef('arquivos', id), a, { merge: !novo });
-      if (novo) notificarTodosDiscentes('arquivo', 'Novo arquivo da turma', [a.titulo, a.disciplina].filter(Boolean).join(' — '), id).catch(() => {});
       return { arquivo: enriquecerArquivoFs({ id, ...a }) };
     } catch (err) { throw toApiError(err); }
   },
@@ -1648,8 +1485,6 @@ const Remote = {
       const id = item.id || FB().doc(FB().collection(FB().db, 'datasImportantes')).id;
       const dados = { titulo: String(item.titulo || '').trim(), data: item.data, categoria: item.categoria, observacoes: String(item.observacoes || '').trim(), criadoEm: new Date().toISOString() };
       await FB().setDoc(docRef('datasImportantes', id), dados);
-      const quando = dados.data ? dados.data.split('-').reverse().join('/') : '';
-      notificarTodosDiscentes('data', item.id ? 'Data importante alterada' : 'Nova data importante', [dados.titulo, quando, dados.categoria].filter(Boolean).join(' — '), id).catch(() => {});
       return { item: { id, ...dados } };
     } catch (err) { throw toApiError(err); }
   },
@@ -1684,9 +1519,8 @@ const Remote = {
       const faltam = usuariosSnap.docs.filter(d => d.id !== 'presidente' && !lidoPor.has(d.id));
       const agora = new Date().toISOString();
       await Promise.all(faltam.map(d => FB().addDoc(FB().collection(FB().db, 'notificacoes', d.id, 'itens'), {
-        tipo: 'mural', titulo: 'Lembrete: aviso no mural', corpo: avisoSnap.data().titulo || 'Você tem um aviso não lido no mural.', refId: avisoId, lida: false, pushEnviado: false, criadoEm: agora,
+        tipo: 'mural', titulo: 'Lembrete: aviso no mural', corpo: avisoSnap.data().titulo || 'Você tem um aviso não lido no mural.', refId: avisoId, lida: false, criadoEm: agora,
       })));
-      dispararPush();
       return { ok: true, enviados: faltam.length };
     } catch (err) { throw toApiError(err); }
   },
@@ -1869,10 +1703,6 @@ const Remote = {
     } catch (err) { throw toApiError(err); }
   },
 
-  salvarConfiguracaoSemestre: (token, config) => chamarFuncao('salvarConfiguracaoSemestre', { config }),
-  encerrarSemestre: (token, rotulo) => chamarFuncao('encerrarSemestre', { rotulo }),
-  listarSemestres: token => chamarFuncao('listarSemestres', {}),
-  lerSemestreArquivado: (token, id) => chamarFuncao('lerSemestreArquivado', { id }),
 };
 
 // Mesma validação de uma avaliação (nota), usada tanto pro lançamento único
@@ -2583,14 +2413,14 @@ function stopPolling() { if (pollId) { clearInterval(pollId); pollId = null; } }
 /* =====================================================================
    LOGIN / SESSÃO
    ===================================================================== */
-function logoMark() { return `<span class="brand-mark"><img src="favicon.svg" alt="" width="30" height="30"></span>`; }
+function logoMark() { return `<span class="brand-mark">${icon('calendar', 16)}</span>`; }
 
 function renderLogin(err) {
   const isP = loginRole === 'presidente';
   $('#app').innerHTML = `
   <div class="login">
     <div class="login-card">
-      <div class="brand">${logoMark()}<span>Medicina 23B · Cronograma acadêmico</span></div>
+      <div class="brand">${logoMark()}<span>Cronograma acadêmico</span></div>
       <h1>Entrar</h1>
       <p class="muted">Veja a agenda da semana e escolha os eventos que quer acompanhar.</p>
       <div class="seg full" role="tablist">
@@ -2628,13 +2458,11 @@ async function doLogin(form) {
     const r = await Backend.login(usuario, senha);
     state.session = { role: r.role, usuario: r.usuario, token: r.token || null, nome: r.nomeReal || '' };
     store.set('cron.session', state.session);
-    store.del(LOGOUT_KEY);
     state.tab = 'cronograma'; state.view = 'dia'; state.cursor = new Date();
     state.followed = new Set(); state.events = []; state.version = '';
     state.minhasNotas = null; state.notasToken = null; state.avaliacoes = []; state.discentes = [];
     loadCache();
     enterApp();
-    marcarUsuarioNaUrl();
     await sync({ force: true, silent: false });
     iniciarNotificacoes();
   } catch (e) {
@@ -2645,32 +2473,18 @@ async function doLogin(form) {
 
 function logout(msg) {
   stopPolling();
-  const pushRemovido = desregistrarPush(); // precisa terminar ANTES do signOut (regra do Firestore)
   pararNotificacoes();
   closeModal();
   store.del('cron.session');
-  store.set(LOGOUT_KEY, true); // não entra sozinho de novo pelo ?u= do app instalado
   state.session = null;
-  marcarUsuarioNaUrl();
   state.minhasNotas = null;
   state.notasToken = null;
   loginRole = 'user';
-  if (!IS_DEMO && window.Firebase && window.Firebase.auth.currentUser) {
-    Promise.resolve(pushRemovido).finally(() => window.Firebase.signOut(window.Firebase.auth).catch(() => {}));
-  }
   renderLogin(msg);
 }
 
-// Erro de sessão: antes de mandar pro login, tenta reconectar sozinho —
-// quase sempre é só o token do Firebase que precisava ser renovado.
 function handleApiError(e) {
-  if (e && e.code === 'AUTH') {
-    garantirSessaoFirebase().then(ok => {
-      if (ok) { toast('Conexão renovada. Tente de novo.'); sync({ force: true }); iniciarNotificacoes(); }
-      else if (state.session) logout(e.message);
-    });
-    return true;
-  }
+  if (e && e.code === 'AUTH') { logout(e.message); return true; }
   return false;
 }
 
@@ -2699,10 +2513,9 @@ function renderShell() {
     ${IS_DEMO ? `<div class="demo-banner no-print">Modo demonstração: os dados ficam só neste navegador. Publique o site com <code>CONFIG.USE_FIREBASE</code> ativo para sincronizar com o Firebase.</div>` : ''}
     <header class="topbar no-print">
       <div class="topbar-in">
-        <div class="brand">${logoMark()}<span>Medicina 23B</span></div>
+        <div class="brand">${logoMark()}<span>Cronograma</span></div>
         <nav class="tabs" role="tablist">
           ${tabs.map(([k, l]) => `<button class="tab" role="tab" data-action="tab" data-tab="${k}">${l}</button>`).join('')}
-          <span class="tab-ink" aria-hidden="true"></span>
         </nav>
         <div class="spacer"></div>
         <button class="icon-btn line" data-action="abrir-busca" title="Buscar" aria-label="Buscar">${icon('search', 16)}</button>
@@ -2716,7 +2529,6 @@ function renderShell() {
         <button class="icon-btn line" data-action="logout" title="Sair" aria-label="Sair">${icon('logout', 16)}</button>
       </div>
     </header>
-    ${bannerPushHTML()}
     <main class="page" id="view"></main>
     <button class="sync-dot no-print" id="sync" data-action="sync" aria-label="Sincronizar agora"><i></i></button>
     <div id="modal-root"></div>
@@ -2739,156 +2551,7 @@ function renderView() {
   else if (state.tab === 'discentes' && isP) v.innerHTML = discentesRosterHTML();
   else { state.tab = 'cronograma'; v.innerHTML = scheduleHTML(isP); }
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('is-active', t.dataset.tab === state.tab));
-  moverIndicadorAba();
 }
-
-/* ---------- navegação animada ----------
-   Toda troca de tela feita pela pessoa (aba, semana anterior/próxima, visão
-   dia/semana/mês) passa por navegarAnimado(): usa a View Transitions API
-   quando o navegador tem (o conteúdo desliza pro lado certo, o topo fica
-   parado) e, senão, uma animação CSS equivalente. As atualizações que chegam
-   sozinhas da sincronização continuam sem animação (renderView direto), pra
-   tela não "pular" enquanto a pessoa lê. */
-const reduzMovimento = () => window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-let navegando = false;
-function navegarAnimado(mudar, dir) {
-  const v = $('#view');
-  if (!v || reduzMovimento()) { mudar(); renderView(); return; }
-  const raiz = document.documentElement;
-  const subir = () => { if (window.scrollY > 120) window.scrollTo(0, 0); };
-  if (document.startViewTransition && !navegando) {
-    navegando = true;
-    raiz.classList.toggle('vt-back', dir < 0);
-    raiz.classList.toggle('vt-fade', !dir);
-    const t = document.startViewTransition(() => { mudar(); renderView(); subir(); });
-    t.finished.finally(() => { navegando = false; raiz.classList.remove('vt-back', 'vt-fade'); });
-    return;
-  }
-  mudar(); renderView(); subir();
-  v.classList.remove('anim-r', 'anim-l', 'anim-up', 'cascata');
-  void v.offsetWidth; // reinicia a animação
-  v.classList.add(dir > 0 ? 'anim-r' : dir < 0 ? 'anim-l' : 'anim-up');
-}
-
-function abasVisiveis() { return Array.from(document.querySelectorAll('.tabs .tab')).map(t => t.dataset.tab); }
-function irParaAba(tab) {
-  if (!tab) return;
-  const abas = abasVisiveis();
-  const de = abas.indexOf(state.tab), para = abas.indexOf(tab);
-  if (tab === state.tab) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
-  navegarAnimado(() => {
-    state.tab = tab;
-    if (tab === 'acompanhados') state.view = 'dia';
-  }, para > de ? 1 : -1);
-  const v = $('#view');
-  if (v && !document.startViewTransition && !reduzMovimento()) v.classList.add('cascata');
-}
-
-// Barrinha azul embaixo da aba ativa: desliza até a aba nova (e, no celular,
-// a lista de abas rola sozinha pra deixar a aba ativa visível).
-function moverIndicadorAba() {
-  const nav = document.querySelector('.tabs');
-  const ink = nav && nav.querySelector('.tab-ink');
-  const ativa = nav && nav.querySelector('.tab.is-active');
-  if (!ink || !ativa) return;
-  const largura = Math.max(0, ativa.offsetWidth - 28);
-  ink.style.width = largura + 'px';
-  ink.style.transform = `translateX(${ativa.offsetLeft + 14}px)`;
-  if (!nav.classList.contains('ink-ready')) requestAnimationFrame(() => nav.classList.add('ink-ready'));
-  if (nav.scrollWidth > nav.clientWidth) {
-    const alvo = ativa.offsetLeft - (nav.clientWidth - ativa.offsetWidth) / 2;
-    nav.scrollTo({ left: Math.max(0, alvo), behavior: 'smooth' });
-  }
-}
-window.addEventListener('resize', () => requestAnimationFrame(moverIndicadorAba));
-if (document.fonts && document.fonts.ready) document.fonts.ready.then(() => moverIndicadorAba());
-
-/* ---------- gestos no celular ----------
-   Deslizar pro lado no conteúdo: no Cronograma em semana/mês troca a
-   semana/mês; nas outras telas, vai pra aba vizinha. Ignora quando o dedo
-   começa em algo que rola de lado (tabelas, lista de abas) ou com modal aberto. */
-(function gestos() {
-  let x0 = 0, y0 = 0, t0 = 0, valido = false;
-  const rolaDeLado = el => {
-    for (let n = el; n && n !== document.body; n = n.parentElement) {
-      if (n.scrollWidth > n.clientWidth + 4) {
-        const ox = getComputedStyle(n).overflowX;
-        if (ox === 'auto' || ox === 'scroll') return true;
-      }
-    }
-    return false;
-  };
-  document.addEventListener('touchstart', ev => {
-    valido = false;
-    if (!state.session || state.modal || ev.touches.length !== 1) return;
-    const alvo = ev.target;
-    if (!alvo.closest || !alvo.closest('#view') || alvo.closest('input,textarea,select,[contenteditable]') || rolaDeLado(alvo)) return;
-    x0 = ev.touches[0].clientX; y0 = ev.touches[0].clientY; t0 = Date.now(); valido = true;
-  }, { passive: true });
-  document.addEventListener('touchend', ev => {
-    if (!valido) return;
-    valido = false;
-    const t = ev.changedTouches[0];
-    const dx = t.clientX - x0, dy = t.clientY - y0;
-    if (Date.now() - t0 > 600 || Math.abs(dx) < 70 || Math.abs(dx) < Math.abs(dy) * 2) return;
-    const dir = dx < 0 ? 1 : -1;
-    if (state.tab === 'cronograma' && state.view !== 'dia') { shift(dir); return; }
-    const abas = abasVisiveis();
-    const prox = abas[abas.indexOf(state.tab) + dir];
-    if (prox) irParaAba(prox);
-  }, { passive: true });
-})();
-
-// Convite pra ativar as notificações (uma vez por aparelho, até a pessoa
-// ativar ou fechar). No iPhone fora do app instalado, explica que precisa instalar.
-function bannerPushHTML() {
-  try {
-    if (IS_DEMO || store.get('cron.bannerPushFechado')) return '';
-    const iosNavegador = ehIOS() && !estaStandalone();
-    if (!iosNavegador && (!pushSuportado() || Notification.permission !== 'default')) return '';
-    const texto = iosNavegador
-      ? '<b>Receba os avisos no iPhone:</b> instale o app (Compartilhar ▸ Adicionar à Tela de Início) e ative as notificações por lá.'
-      : '<b>Receba os avisos no celular</b> — mural, mudanças de horário e lembrete 2h antes dos seus eventos, mesmo com o app fechado.';
-    return `<div class="push-banner no-print" id="push-banner"><div class="push-banner-in">${icon('bell', 18)}<p>${texto}</p>
-      ${iosNavegador ? `<button class="btn sm" data-action="install-app">Como instalar</button>` : `<button class="btn sm primary" data-action="ativar-push">Ativar</button>`}
-      <button class="icon-btn" data-action="fechar-banner-push" aria-label="Fechar">${icon('x', 16)}</button></div></div>`;
-  } catch (e) { return ''; }
-}
-function fecharBannerPush(lembrar) {
-  const b = $('#push-banner');
-  if (lembrar) store.set('cron.bannerPushFechado', true);
-  if (!b) return;
-  b.classList.add('is-leaving');
-  setTimeout(() => b.remove(), 260);
-}
-
-// Arrastar a "folha" do modal pra baixo fecha (celular).
-(function arrastarModal() {
-  let y0 = 0, dy = 0, modal = null;
-  document.addEventListener('touchstart', ev => {
-    const m = ev.target.closest && ev.target.closest('.modal');
-    if (!m || m.classList.contains('coord') || window.innerWidth > 640) return;
-    const overlay = m.parentElement;
-    const naAlca = ev.touches[0].clientY - m.getBoundingClientRect().top < 56;
-    if (!naAlca || (overlay && overlay.scrollTop > 0)) return;
-    modal = m; y0 = ev.touches[0].clientY; dy = 0;
-  }, { passive: true });
-  document.addEventListener('touchmove', ev => {
-    if (!modal) return;
-    dy = Math.max(0, ev.touches[0].clientY - y0);
-    modal.classList.add('is-dragging');
-    modal.style.transform = `translateY(${dy}px)`;
-  }, { passive: true });
-  document.addEventListener('touchend', () => {
-    if (!modal) return;
-    const m = modal; modal = null;
-    m.classList.remove('is-dragging');
-    if (dy > 90) { closeModal(); return; }
-    m.style.transition = 'transform .25s cubic-bezier(.2,.8,.2,1)';
-    m.style.transform = '';
-    setTimeout(() => { m.style.transition = ''; }, 260);
-  }, { passive: true });
-})();
 
 function refreshUI() {
   renderView();
@@ -2907,7 +2570,7 @@ function toast(msg, type) {
   el.className = 'toast' + (type === 'err' ? ' err' : '');
   el.textContent = msg;
   root.appendChild(el);
-  setTimeout(() => { el.classList.add('is-leaving'); setTimeout(() => el.remove(), 260); }, 3400);
+  setTimeout(() => el.remove(), 3400);
 }
 
 /* =====================================================================
@@ -3450,35 +3113,13 @@ function iniciarNotificacoes() {
     // DEPOIS da primeira leitura — senão, toda vez que o site abre, ele
     // "notificaria" de novo as últimas 30 notificações antigas.
     if (!notificacoesPrimeiraLeitura) {
-      const novas = snap.docChanges().filter(c => c.type === 'added');
-      novas.forEach(c => {
+      snap.docChanges().filter(c => c.type === 'added').forEach(c => {
         const n = c.doc.data();
-        // mesma "tag" do push enviado pelo servidor: se os dois chegarem, um substitui o outro
-        mostrarNotificacaoDoSistema(n.titulo, n.corpo, 'n-' + c.doc.id);
-        toastNotificacao(n);
+        mostrarNotificacaoDoSistema(n.titulo, n.corpo);
       });
-      // Aviso novo do presidente = provavelmente algo mudou no cronograma/mural:
-      // sincroniza na hora, sem esperar o próximo ciclo.
-      if (novas.length) sync();
     }
     notificacoesPrimeiraLeitura = false;
-  }, () => {
-    // Sem permissão (sessão do Firebase ainda não restaurada/expirada): reconecta e tenta de novo.
-    setTimeout(() => { if (state.session) garantirSessaoFirebase().then(ok => { if (ok) iniciarNotificacoes(); }); }, 4000);
-  });
-}
-
-// Banner discreto dentro do app (com ele aberto), clicável, além da notificação do sistema.
-function toastNotificacao(n) {
-  const root = $('#toast-root');
-  if (!root) return;
-  const el = document.createElement('button');
-  el.type = 'button';
-  el.className = 'toast toast-notif';
-  el.dataset.action = 'notificacoes';
-  el.innerHTML = `${icon(NOTIF_ICON[n.tipo] || 'bell', 16)}<span><b>${esc(n.titulo || 'Novo aviso')}</b>${n.corpo ? `<br><small>${esc(String(n.corpo).slice(0, 120))}</small>` : ''}</span>`;
-  root.appendChild(el);
-  setTimeout(() => { el.classList.add('is-leaving'); setTimeout(() => el.remove(), 300); }, 6000);
+  }, () => { /* sem permissão ainda (ex.: acabou de deslogar) — ignora */ });
 }
 
 // Pede permissão do navegador pra mostrar notificações do sistema (o banner
@@ -3488,68 +3129,19 @@ function toastNotificacao(n) {
 function pedirPermissaoNotificacao() {
   try {
     if (!('Notification' in window)) return;
-    if (Notification.permission === 'default') Notification.requestPermission().then(registrarPush).catch(() => {});
-    else registrarPush();
+    if (Notification.permission === 'default') Notification.requestPermission().catch(() => {});
   } catch (err) { /* ignora — não é essencial pro resto do site funcionar */ }
 }
 
-async function mostrarNotificacaoDoSistema(titulo, corpo, tag) {
+async function mostrarNotificacaoDoSistema(titulo, corpo) {
   try {
     if (!('Notification' in window) || Notification.permission !== 'granted') return;
-    // Com o app aberto e na tela, o banner dentro do app (toastNotificacao) já basta.
-    if (!document.hidden) return;
     if (navigator.serviceWorker) {
       const reg = await navigator.serviceWorker.getRegistration();
-      if (reg) { await reg.showNotification(titulo || 'Medicina 23B', { body: corpo || '', icon: 'icon-192.png', badge: 'icon-maskable-192.png', tag: tag || undefined }); return; }
+      if (reg) { await reg.showNotification(titulo || 'Cronograma Acadêmico', { body: corpo || '', icon: 'icon-192.png', badge: 'icon-192.png' }); return; }
     }
-    new Notification(titulo || 'Medicina 23B', { body: corpo || '', tag: tag || undefined });
+    new Notification(titulo || 'Cronograma Acadêmico', { body: corpo || '' });
   } catch (err) { /* navegador sem suporte, ou permissão negada — ignora */ }
-}
-
-/* ---------- Push de verdade (FCM) — chega com o app fechado ----------
-   Guarda o token do aparelho em pushTokens/{sha256(token)} com o usuário
-   dono; o Worker da Cloudflare (push-worker/)
-   lê essa coleção e dispara o push quando surge uma notificação nova. */
-const PUSH_KEY = 'cron.pushDoc';
-function pushSuportado() {
-  return !IS_DEMO && !!CONFIG.VAPID_KEY && 'Notification' in window && 'serviceWorker' in navigator && 'PushManager' in window && location.protocol !== 'file:';
-}
-async function registrarPush() {
-  try {
-    if (!pushSuportado() || !state.session || Notification.permission !== 'granted') return;
-    const F = await waitFirebase();
-    const M = await import('https://www.gstatic.com/firebasejs/10.14.1/firebase-messaging.js');
-    if (!(await M.isSupported())) return;
-    const reg = await navigator.serviceWorker.ready;
-    const token = await M.getToken(M.getMessaging(F.app), { vapidKey: CONFIG.VAPID_KEY, serviceWorkerRegistration: reg });
-    if (!token) return;
-    const id = await sha256Hex(token);
-    await F.setDoc(F.doc(F.db, 'pushTokens', id), {
-      token, usuario: state.session.usuario, atualizadoEm: new Date().toISOString(),
-      plataforma: (navigator.userAgentData && navigator.userAgentData.platform) || navigator.platform || '',
-      standalone: estaStandalone(),
-    });
-    store.set(PUSH_KEY, id);
-  } catch (err) { /* sem push neste aparelho — o resto do app segue normal */ }
-}
-function desregistrarPush() {
-  try {
-    const id = store.get(PUSH_KEY); if (!id || !window.Firebase) return Promise.resolve();
-    store.del(PUSH_KEY);
-    return window.Firebase.deleteDoc(window.Firebase.doc(window.Firebase.db, 'pushTokens', id)).catch(() => {});
-  } catch (err) { return Promise.resolve(); }
-}
-async function ativarPush() {
-  try {
-    if (!('Notification' in window)) { toast('Este navegador não suporta notificações.'); return; }
-    if (ehIOS() && !estaStandalone()) { toast('No iPhone, instale o app (Compartilhar ▸ Adicionar à Tela de Início) e abra por lá.'); return; }
-    const perm = Notification.permission === 'granted' ? 'granted' : await Notification.requestPermission();
-    if (perm !== 'granted') { toast('Notificações bloqueadas. Libere nas configurações do navegador/aparelho.'); return; }
-    await registrarPush();
-    fecharBannerPush(false);
-    toast('Notificações ativadas neste aparelho.');
-    if (state.modal === 'notificacoes') abrirNotificacoes(true);
-  } catch (err) { toast('Não foi possível ativar as notificações.'); }
 }
 
 function pararNotificacoes() {
@@ -3575,7 +3167,6 @@ function abrirNotificacoes(reabrindo) {
       <h2>Notificações</h2>
       <button type="button" class="icon-btn" data-action="close-modal" aria-label="Fechar">${icon('x', 18)}</button>
     </div>
-    ${(pushSuportado() && (!('Notification' in window) || Notification.permission !== 'granted')) ? `<div class="notif-item" style="margin-bottom:12px;cursor:default"><span class="notif-body"><b>Receber avisos com o app fechado</b><br><span class="muted">Ative as notificações neste aparelho para ser avisado de mural, mudanças de horário/sala e cancelamentos.</span><br><button class="btn sm" style="margin-top:8px" data-action="ativar-push">Ativar notificações</button></span></div>` : ''}
     ${itens.length ? `<div style="margin-bottom:12px"><button class="btn sm" data-action="marcar-todas-notif-lidas">Marcar todas como lidas</button></div>` : ''}
     ${itens.length ? `<div class="notif-list">${itens.map(n => `
       <button type="button" class="notif-item ${n.lida ? '' : 'is-unread'}" data-action="marcar-notif-lida" data-id="${esc(n.id)}">
@@ -4079,6 +3670,7 @@ function notasAlunoHTML() {
     <div class="spacer"></div>
     <button class="btn sm ghost" data-action="sair-notas">${icon('lock', 14)} Sair da aba Notas</button>
   </div>`;
+  h += simuladorHTML();
   if (!lista.length) {
     return h + `<div class="empty">${icon('star', 30)}<h3>Nenhuma nota lançada ainda</h3><p>Assim que o presidente lançar sua primeira nota, ela aparece aqui.</p></div>`;
   }
@@ -4095,6 +3687,120 @@ function notasAlunoHTML() {
   });
   return h;
 }
+
+/* ---------- discente: simulador de aprovação ----------
+   Só simula: o que é digitado fica salvo apenas neste navegador (localStorage)
+   e nunca vai para o Firestore nem aparece para o presidente. Cada nota pode
+   ser digitada em escala 4, 6 ou 10 e é convertida para 10 automaticamente. */
+const SIM_REGRAS = {
+  tut: { nome: 'Tutoria', pesoF: 6, pesoS: 4 },
+  morfo: { nome: 'Morfofuncional', pesoF: 4, pesoS: 6 },
+};
+const SIM_MEDIA = 8;
+const simChave = () => 'cron.simulador.' + ((state.session && state.session.usuario) || 'anonimo');
+
+function simCarregar() {
+  let d = {};
+  try { d = store.get(simChave(), {}) || {}; } catch (e) { d = {}; }
+  const campo = x => ({
+    v: (x && typeof x.v === 'string') ? x.v : '',
+    e: [4, 6, 10].indexOf(Number(x && x.e)) >= 0 ? Number(x.e) : 10,
+  });
+  const out = {};
+  Object.keys(SIM_REGRAS).forEach(k => { const o = d[k] || {}; out[k] = { f: campo(o.f), s: campo(o.s) }; });
+  return out;
+}
+
+// Converte o valor digitado para a escala 10. Devolve null se estiver vazio ou inválido.
+function simParse(c) {
+  const bruto = String(c.v == null ? '' : c.v).replace(',', '.').trim();
+  if (bruto === '') return null;
+  const n = Number(bruto);
+  if (isNaN(n) || !c.e) return null;
+  return n * 10 / c.e;
+}
+
+// Arredonda para cima com 2 casas, para não mostrar um valor menor que o necessário.
+const simCima = v => Math.ceil(v * 100 - 1e-9) / 100;
+
+function simResultadoTexto(k, e) {
+  const reg = SIM_REGRAS[k];
+  const f = simParse(e.f), s = simParse(e.s);
+  const K = (f !== null ? reg.pesoF * f : 0) + (s !== null ? reg.pesoS * s : 0);
+  const pesoLancado = (f !== null ? reg.pesoF : 0) + (s !== null ? reg.pesoS : 0);
+  if (f !== null && s !== null) {
+    const media = K / 10;
+    const ok = media >= SIM_MEDIA - 1e-9;
+    return `Média final: ${fmtNota(media)} de 10 — ${ok ? 'Aprovado' : 'Reprovado'}`;
+  }
+  if (pesoLancado === 0) {
+    return `Para passar, a média ponderada precisa dar ${SIM_MEDIA}. Ex.: ${SIM_MEDIA} nas duas avaliações.`;
+  }
+  const faltaF = f === null;
+  const rotulo = faltaF ? 'Formativa' : 'Somativa';
+  const peso = faltaF ? reg.pesoF : reg.pesoS;
+  const precisa = (SIM_MEDIA * 10 - K) / peso;
+  if (precisa <= 0) return `Já garantido: você passa com qualquer nota na ${rotulo}, inclusive zero.`;
+  if (precisa > 10) return `Não dá para passar só pela ${rotulo}: seria preciso ${fmtNota(precisa)} de 10, acima do máximo.`;
+  const p10 = simCima(precisa), p6 = simCima(precisa * 0.6), p4 = simCima(precisa * 0.4);
+  return `Precisa tirar pelo menos ${fmtNota(p10)} de 10 na ${rotulo} (equivale a ${fmtNota(p6)} de 6 ou ${fmtNota(p4)} de 4).`;
+}
+
+function simCampoHTML(k, p, rotulo, c) {
+  const id = 'sim-' + k + '-' + p;
+  const eq = simParse(c);
+  return `<div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-top:8px">
+    <label for="${id}" style="min-width:92px">${rotulo}</label>
+    <input class="input" id="${id}" data-sim="${k}" data-parte="${p}" data-campo="v" inputmode="decimal" placeholder="nota" value="${esc(c.v)}" style="width:90px">
+    <select class="input" data-sim="${k}" data-parte="${p}" data-campo="e" aria-label="Escala da ${rotulo}" style="width:96px">
+      ${[10, 6, 4].map(x => `<option value="${x}" ${c.e === x ? 'selected' : ''}>de ${x}</option>`).join('')}
+    </select>
+    <span class="muted" data-sim-eq="${k}-${p}">${eq === null ? '' : '= ' + fmtNota(eq) + ' de 10'}</span>
+  </div>`;
+}
+
+function simBlocoHTML(k, e) {
+  const reg = SIM_REGRAS[k];
+  return `<div class="nota-card" style="margin-bottom:10px">
+    <div class="nota-card-topo">
+      <span class="chip">${esc(reg.nome)}</span>
+      <span class="muted">Formativa peso ${reg.pesoF} · Somativa peso ${reg.pesoS}</span>
+    </div>
+    ${simCampoHTML(k, 'f', 'Formativa', e.f)}
+    ${simCampoHTML(k, 's', 'Somativa', e.s)}
+    <div data-sim-resultado="${k}" style="margin-top:12px;font-weight:600">${simResultadoTexto(k, e)}</div>
+  </div>`;
+}
+
+function simuladorHTML() {
+  const est = simCarregar();
+  return `<section class="nota-group" id="simulador" style="margin-bottom:18px">
+    <h3 class="nota-group-title">Simulador de aprovação</h3>
+    <p class="muted" style="margin:0 0 10px">Teste notas sem salvar nada no sistema. Digite cada nota na escala dela (4, 6 ou 10) e o simulador converte para 10. Média para passar: ${SIM_MEDIA}.</p>
+    ${Object.keys(SIM_REGRAS).map(k => simBlocoHTML(k, est[k])).join('')}
+  </section>`;
+}
+
+function simAtualizar(el) {
+  const k = el.dataset.sim, p = el.dataset.parte, campo = el.dataset.campo;
+  if (!SIM_REGRAS[k] || (p !== 'f' && p !== 's')) return;
+  const est = simCarregar();
+  if (campo === 'v') est[k][p].v = el.value;
+  else est[k][p].e = Number(el.value);
+  store.set(simChave(), est);
+  const spanEq = document.querySelector(`[data-sim-eq="${k}-${p}"]`);
+  const eq = simParse(est[k][p]);
+  if (spanEq) spanEq.textContent = eq === null ? '' : '= ' + fmtNota(eq) + ' de 10';
+  const res = document.querySelector(`[data-sim-resultado="${k}"]`);
+  if (res) res.textContent = simResultadoTexto(k, est[k]);
+}
+
+['input', 'change'].forEach(tipo => {
+  document.addEventListener(tipo, ev => {
+    const alvo = ev.target;
+    if (alvo && alvo.closest && alvo.closest('#simulador') && alvo.dataset && alvo.dataset.sim) simAtualizar(alvo);
+  });
+});
 
 /* ---------- presidente: Envio de Notas (lista fixa + lançamento) ---------- */
 function discentesOrdenados() {
@@ -4880,15 +4586,7 @@ function openModal(html, kind, extraClass) {
 }
 function closeModal() {
   const r = $('#modal-root');
-  // Anima a saída e só então remove — removendo exatamente ESTE overlay, pra
-  // não apagar um modal novo aberto logo em seguida (closeModal(); openModal(...)).
-  const ov = r && r.querySelector('.overlay');
-  if (ov && !reduzMovimento()) {
-    ov.classList.add('is-closing');
-    ov.removeAttribute('data-action');
-    ov.style.pointerEvents = 'none';
-    setTimeout(() => ov.remove(), 220);
-  } else if (r) r.innerHTML = '';
+  if (r) r.innerHTML = '';
   document.body.style.overflow = '';
   state.modal = null;
   state.openId = null;
@@ -6136,11 +5834,10 @@ async function toggleCancelado(id) {
    ===================================================================== */
 function shift(dir) {
   if (state.view === 'dia') return; // visão "Hoje" é fixa, sem navegação
-  navegarAnimado(() => {
-    const c = state.cursor;
-    if (state.tab === 'cronograma' && state.view === 'mes') state.cursor = new Date(c.getFullYear(), c.getMonth() + dir, 1);
-    else state.cursor = addDays(c, 7 * dir);
-  }, dir);
+  const c = state.cursor;
+  if (state.tab === 'cronograma' && state.view === 'mes') state.cursor = new Date(c.getFullYear(), c.getMonth() + dir, 1);
+  else state.cursor = addDays(c, 7 * dir);
+  renderView();
 }
 
 function newInCell(date, periodKey) {
@@ -6154,13 +5851,12 @@ document.addEventListener('click', ev => {
   const a = el.dataset.action, id = el.dataset.id;
   switch (a) {
     case 'login-role': loginRole = el.dataset.role; renderLogin(); break;
-    case 'tab': irParaAba(el.dataset.tab); break;
-    case 'go-tab': irParaAba(el.dataset.tab); break;
+    case 'tab': state.tab = el.dataset.tab; if (state.tab === 'acompanhados') state.view = 'dia'; renderView(); break;
+    case 'go-tab': state.tab = el.dataset.tab; renderView(); break;
     case 'prev': shift(-1); break;
     case 'next': shift(1); break;
-    case 'today': { const hoje = new Date(), seg = mondayOf(hoje); const d = state.cursor < seg ? 1 : (state.cursor > addDays(seg, 7) ? -1 : 0); navegarAnimado(() => { state.cursor = hoje; }, d); break; }
-    case 'view': { const ordem = ['dia', 'semana', 'mes']; const de = ordem.indexOf(state.view), para = ordem.indexOf(el.dataset.view); navegarAnimado(() => { state.view = el.dataset.view; }, para === de ? 0 : (para > de ? 1 : -1)); break; }
-    case 'fechar-banner-push': fecharBannerPush(true); break;
+    case 'today': state.cursor = new Date(); renderView(); break;
+    case 'view': state.view = el.dataset.view; renderView(); break;
     case 'legend': { const k = el.dataset.cat; if (state.hidden.has(k)) state.hidden.delete(k); else state.hidden.add(k); renderView(); break; }
     case 'open-event': openEvent(id); break;
     case 'goto-week': state.view = 'semana'; state.cursor = parseISO(el.dataset.date); renderView(); break;
@@ -6215,7 +5911,6 @@ document.addEventListener('click', ev => {
     case 'copy-ics': copyIcsLink(); break;
     case 'notificacoes': abrirNotificacoes(); break;
     case 'marcar-notif-lida': marcarNotificacaoLida(el.dataset.id); break;
-    case 'ativar-push': ativarPush(); break;
     case 'marcar-todas-notif-lidas': marcarTodasNotificacoesLidas(); break;
     case 'follow-all-cited': followAllCited(); break;
     case 'install-app': installApp(); break;
@@ -6369,135 +6064,26 @@ window.addEventListener('storage', ev => { if (IS_DEMO && ev.key === 'cron.demo'
 // Se por algum motivo a sessão do Auth não existir mais (ex.: expirou ou
 // foi limpa), a primeira sincronização volta erro de autenticação e
 // handleApiError() já devolve pro login (ver sync()/logout()).
-//
-// Além disso, pra "já abrir logado" no app instalado (PWA):
-// 1. Enquanto a pessoa está logada, o endereço da página fica com ?u=<usuario>.
-//    O manifest.json não fixa start_url, então ao instalar o app o navegador
-//    guarda exatamente esse endereço — no iPhone, onde o app instalado NÃO
-//    enxerga o login feito no Safari, é isso que faz ele abrir já logado.
-// 2. Se a sessão do Firebase sumir (aparelho limpou dados, iOS apagou o
-//    armazenamento etc.), o site entra de novo sozinho, sem pedir nada.
-const TABS_VALIDAS = ['cronograma', 'acompanhados', 'historico', 'arquivos', 'mural', 'datas', 'notas', 'discentes'];
-const LOGOUT_KEY = 'cron.saiuDeProposito';
-
-function marcarUsuarioNaUrl() {
-  try {
-    const url = new URL(location.href);
-    url.searchParams.delete('tab');
-    url.searchParams.delete('evento');
-    if (state.session && state.session.role !== 'presidente') url.searchParams.set('u', state.session.usuario);
-    else url.searchParams.delete('u');
-    history.replaceState(history.state, '', url.pathname + url.search + url.hash);
-  } catch (e) { /* navegador antigo — só não marca */ }
-}
-
-// Garante que o Firebase Auth está logado como a pessoa da sessão salva;
-// se não estiver, entra de novo sozinho (discente não tem senha; a do
-// presidente já está neste arquivo). Devolve true se deu certo.
-let garantindoSessao = null;
-function garantirSessaoFirebase() {
-  if (IS_DEMO || !state.session) return Promise.resolve(true);
-  if (garantindoSessao) return garantindoSessao;
-  garantindoSessao = (async () => {
-    const F = await waitFirebase();
-    const atual = await F.authReady;
-    const esperado = state.session.usuario + '@turma23b.local';
-    if (F.auth.currentUser && F.auth.currentUser.email === esperado) return true;
-    try {
-      if (F.auth.currentUser || atual) await F.signOut(F.auth).catch(() => {});
-      const r = await Remote.login(state.session.usuario, state.session.role === 'presidente' ? SENHA_PRESIDENTE : '');
-      if (r.nomeReal && r.nomeReal !== state.session.nome) { state.session.nome = r.nomeReal; store.set('cron.session', state.session); }
-      return true;
-    } catch (e) {
-      // Usuário removido da turma: aí sim volta pro login. Sem internet:
-      // continua mostrando os dados salvos e tenta de novo depois.
-      if (e && /não encontrado/i.test(e.message || '')) { logout(e.message); }
-      return false;
-    }
-  })().finally(() => { garantindoSessao = null; });
-  return garantindoSessao;
-}
-
-// Sem sessão salva neste aparelho: tenta descobrir quem é (sessão do Firebase
-// ainda guardada, ou ?u= do endereço do app instalado) e entra sozinho.
-async function sessaoAutomatica(uDaUrl) {
-  if (IS_DEMO) return null;
-  try {
-    const F = await waitFirebase();
-    const atual = await F.authReady;
-    let usuario = atual && atual.email ? atual.email.split('@')[0] : '';
-    if (!usuario) {
-      const u = String(uDaUrl || '').trim().toLowerCase();
-      if (!u || u === 'presidente' || store.get(LOGOUT_KEY) || !/^[a-z0-9._-]{2,40}$/.test(u)) return null;
-      usuario = u;
-    }
-    const r = await Remote.login(usuario, usuario === 'presidente' ? SENHA_PRESIDENTE : '');
-    const s = { role: r.role, usuario: r.usuario, token: r.token || null, nome: r.nomeReal || '' };
-    store.set('cron.session', s);
-    return s;
-  } catch (e) { return null; }
-}
-
-function splashHTML() {
-  return `<div class="splash"><img src="icon-192.png" alt="" width="96" height="96"><div class="splash-bar"><i></i></div></div>`;
-}
-
-(async function boot() {
-  const params = new URLSearchParams(location.search);
-  const tabDaUrl = params.get('tab');
-  const eventoDaUrl = params.get('evento'); // toque numa notificação de evento
-  let s = store.get('cron.session');
-  if (!s || !s.usuario) {
-    $('#app').innerHTML = splashHTML();
-    s = await sessaoAutomatica(params.get('u'));
-  }
+(function boot() {
+  const s = store.get('cron.session');
   if (s && s.usuario) {
     state.session = s;
     loadCache();
-    if (tabDaUrl && TABS_VALIDAS.indexOf(tabDaUrl) >= 0) state.tab = tabDaUrl;
     enterApp();
-    marcarUsuarioNaUrl();
-    const abrirEventoDaUrl = () => { if (eventoDaUrl && state.events.some(x => x.id === eventoDaUrl) && !state.modal) openEvent(eventoDaUrl); };
-    abrirEventoDaUrl(); // já com os dados do cache
-    if (await garantirSessaoFirebase()) {
-      sync({ force: true }).then(abrirEventoDaUrl);
-      iniciarNotificacoes();
-    } else {
-      setSync('error');
-    }
+    sync({ force: true });
+    iniciarNotificacoes();
   } else {
     renderLogin();
-    const u = params.get('u');
-    const campo = $('#lg-user');
-    if (u && campo && !campo.value) campo.value = u;
   }
 })();
 
-// Registra o Service Worker (sw.js) — requisito pra instalar o app e pra
-// receber push com o app fechado. Sem HTTPS (ex.: abrindo o arquivo direto
+// Registra o Service Worker (sw.js) — é um dos requisitos do navegador pra
+// oferecer "Instalar aplicativo" no Android/Chrome/Edge (ver
+// beforeinstallprompt, mais acima). Sem HTTPS (ex.: abrindo o arquivo direto
 // do computador) o navegador recusa o registro sozinho; nesse caso o site
-// continua funcionando normalmente, só sem instalar/push.
+// continua funcionando normalmente, só sem a opção de instalar.
 if ('serviceWorker' in navigator && location.protocol !== 'file:') {
-  navigator.serviceWorker.register('sw.js', { updateViaCache: 'none' }).then(reg => {
-    // Procura versão nova do app sempre que ele volta pra frente da tela.
-    document.addEventListener('visibilitychange', () => { if (!document.hidden) reg.update().catch(() => {}); });
-  }).catch(() => { /* sem instalação, sem problema */ });
-
-  // Mensagens do Service Worker: toque numa notificação com o app já aberto
-  // (vai direto pra aba certa) e renovação do token de push.
-  navigator.serviceWorker.addEventListener('message', ev => {
-    const d = ev.data || {};
-    if (d.tipo === 'renovar-push') { registrarPush(); return; }
-    if (d.tipo === 'abrir' && d.url && state.session) {
-      try {
-        const p = new URL(d.url).searchParams;
-        const tab = p.get('tab'), ev2 = p.get('evento');
-        if (ev2 && state.events.some(x => x.id === ev2)) { irParaAba('cronograma'); openEvent(ev2); }
-        else if (tab && TABS_VALIDAS.indexOf(tab) >= 0) irParaAba(tab);
-        sync();
-      } catch (e) { /* ignora */ }
-    }
-  });
+  window.addEventListener('load', () => { navigator.serviceWorker.register('sw.js').catch(() => { /* sem instalação, sem problema */ }); });
 }
 })();
 </script>
