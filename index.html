@@ -3723,27 +3723,40 @@ function simParse(c) {
 // Arredonda para cima com 2 casas, para não mostrar um valor menor que o necessário.
 const simCima = v => Math.ceil(v * 100 - 1e-9) / 100;
 
+// Nota final da disciplina (ponderada) — só mostra quando as duas notas estão lançadas.
 function simResultadoTexto(k, e) {
   const reg = SIM_REGRAS[k];
   const f = simParse(e.f), s = simParse(e.s);
-  const K = (f !== null ? reg.pesoF * f : 0) + (s !== null ? reg.pesoS * s : 0);
-  const pesoLancado = (f !== null ? reg.pesoF : 0) + (s !== null ? reg.pesoS : 0);
-  if (f !== null && s !== null) {
-    const media = K / 10;
-    const ok = media >= SIM_MEDIA - 1e-9;
-    return `Média final: ${fmtNota(media)} de 10 — ${ok ? 'Aprovado' : 'Reprovado'}`;
+  if (f !== null && s !== null) return `Nota final de ${reg.nome}: ${fmtNota((reg.pesoF * f + reg.pesoS * s) / 10)} de 10`;
+  if (f === null && s === null) return 'Lance as notas para ver a nota final desta disciplina.';
+  return `Falta lançar a ${f === null ? 'formativa' : 'somativa'} para ver a nota final.`;
+}
+
+// Módulo = média entre Tutoria e Morfofuncional (cada uma já ponderada: 6/4 e 4/6).
+// Soma dos pesos = 20, então a média do módulo é (soma ponderada) / 20.
+function simModuloTexto(est) {
+  const slots = [];
+  Object.keys(SIM_REGRAS).forEach(k => {
+    const reg = SIM_REGRAS[k];
+    slots.push({ peso: reg.pesoF, nome: reg.nome + ' (formativa)', n: simParse(est[k].f) });
+    slots.push({ peso: reg.pesoS, nome: reg.nome + ' (somativa)', n: simParse(est[k].s) });
+  });
+  const K = slots.reduce((a, x) => a + (x.n !== null ? x.peso * x.n : 0), 0);
+  const W = slots.reduce((a, x) => a + (x.n === null ? x.peso : 0), 0);
+  const faltam = slots.filter(x => x.n === null);
+  if (!faltam.length) {
+    const media = K / 20;
+    return `Média do módulo: ${fmtNota(media)} de 10 — ${media >= SIM_MEDIA - 1e-9 ? 'Aprovado' : 'Reprovado'}`;
   }
-  if (pesoLancado === 0) {
-    return `Para passar, a média ponderada precisa dar ${SIM_MEDIA}. Ex.: ${SIM_MEDIA} nas duas avaliações.`;
-  }
-  const faltaF = f === null;
-  const rotulo = faltaF ? 'Formativa' : 'Somativa';
-  const peso = faltaF ? reg.pesoF : reg.pesoS;
-  const precisa = (SIM_MEDIA * 10 - K) / peso;
-  if (precisa <= 0) return `Já garantido: você passa com qualquer nota na ${rotulo}, inclusive zero.`;
-  if (precisa > 10) return `Não dá para passar só pela ${rotulo}: seria preciso ${fmtNota(precisa)} de 10, acima do máximo.`;
+  const precisa = (SIM_MEDIA * 20 - K) / W;
+  if (precisa <= 0) return 'Já garantido: você passa no módulo com qualquer nota nas que faltam, inclusive zero.';
+  if (precisa > 10) return `Não dá para passar no módulo com as notas que faltam: seria preciso ${fmtNota(precisa)} de 10 em média nelas, acima do máximo.`;
   const p10 = simCima(precisa), p6 = simCima(precisa * 0.6), p4 = simCima(precisa * 0.4);
-  return `Precisa tirar pelo menos ${fmtNota(p10)} de 10 na ${rotulo} (equivale a ${fmtNota(p6)} de 6 ou ${fmtNota(p4)} de 4).`;
+  const equiv = `equivale a ${fmtNota(p6)} de 6 ou ${fmtNota(p4)} de 4`;
+  if (faltam.length === 1) {
+    return `Precisa tirar pelo menos ${fmtNota(p10)} de 10 em ${faltam[0].nome} (${equiv}).`;
+  }
+  return `Para passar no módulo, as notas que faltam (${faltam.map(x => x.nome).join(', ')}) precisam dar pelo menos ${fmtNota(p10)} de 10 em média, ponderadas pelos pesos (${equiv}).`;
 }
 
 function simCampoHTML(k, p, rotulo, c) {
@@ -3778,6 +3791,11 @@ function simuladorHTML() {
     <h3 class="nota-group-title">Simulador de aprovação</h3>
     <p class="muted" style="margin:0 0 10px">Teste notas sem salvar nada no sistema. Digite cada nota na escala dela (4, 6 ou 10) e o simulador converte para 10. Média para passar: ${SIM_MEDIA}.</p>
     ${Object.keys(SIM_REGRAS).map(k => simBlocoHTML(k, est[k])).join('')}
+    <div class="nota-card" style="margin-bottom:10px">
+      <div class="nota-card-topo"><span class="chip">Módulo</span></div>
+      <div data-sim-modulo style="margin-top:6px;font-weight:600">${simModuloTexto(est)}</div>
+      <p class="muted" style="margin:8px 0 0">Média do módulo = média entre Tutoria e Morfofuncional. Mínimo para passar: ${SIM_MEDIA}.</p>
+    </div>
   </section>`;
 }
 
@@ -3793,6 +3811,8 @@ function simAtualizar(el) {
   if (spanEq) spanEq.textContent = eq === null ? '' : '= ' + fmtNota(eq) + ' de 10';
   const res = document.querySelector(`[data-sim-resultado="${k}"]`);
   if (res) res.textContent = simResultadoTexto(k, est[k]);
+  const mod = document.querySelector('[data-sim-modulo]');
+  if (mod) mod.textContent = simModuloTexto(est);
 }
 
 ['input', 'change'].forEach(tipo => {
